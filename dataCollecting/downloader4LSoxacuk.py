@@ -173,6 +173,11 @@ imagehash = {}
 urlPool = []
 
 if __name__ == '__main__':
+    if len(sys.argv)>1:
+        BASE_PATH = sys.argv[1]
+    if len(sys.argv)>2:
+        BEGIN = int(sys.argv[2])
+        END = int(sys.argv[3])
     cp = contentParser()
     pp = pageParser()
     def workOnUrl(url):
