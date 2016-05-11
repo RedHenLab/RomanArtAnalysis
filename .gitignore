@@ -1,0 +1,15 @@
+*.json
+*.jpg
+*.png
+*.mat
+*.pyc
+*.pkl.gz
+logs
+mnist-data
+*.log
+~*
+*~
+#*
+*#
+.*
+*.out
