@@ -7,6 +7,7 @@ import urllib
 import time
 import socket
 import simplejson as json
+import sys,os
 
 socket.setdefaulttimeout(5)
 ua = {'user-agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:38.0) Gecko/20100101 Firefox/38.0',\
@@ -62,6 +63,14 @@ class pageParser(HTMLParser):
         HTMLParser.__init__(self)
         self.sreset()
     def handle_starttag(self, tag, attrs):
+        if tag == 'title':
+            self.state = 11
+        if tag == 'meta':
+            at = findAttr(attrs,'name')
+            if (at is not None) and at[1]=='Keywords':
+                ac = findAttr(attrs,'content')
+                if ac is not None:
+                    self.meta['Keywords'] = ac[1]
         if tag == 'a':
             at = findAttr(attrs,'href')
             if (at is not None) and at[1].startswith('img.htm?id='):
@@ -121,6 +130,8 @@ class pageParser(HTMLParser):
                 self.state = 7
                 self.last = tag
     def handle_endtag(self, tag):
+        if tag == 'title':
+            self.state = -1
         if self.state == 2:
             self.state = 1
             return
@@ -139,8 +150,10 @@ class pageParser(HTMLParser):
             return
     def handle_data(self, data):
         tdata = data.strip()
+        if self.state == 11:
+            self.meta['Page_title'] = data
         if self.state == 2:
-            if 'title' in self.meta:
+            if 'Title' in self.meta:
                 self.meta['Title'].append(tdata)
             else:
                 self.meta['Title'] = [tdata]
@@ -167,11 +180,16 @@ CONTENT_BASE = 'http://ancientrome.ru/art/artworken/index.htm?id=739&pn=20&sp='
 BEGIN = 1
 END = 2
 PAGE_BASE = 'http://ancientrome.ru/art/artworken/'
-BASE_PATH = '../database/arr/'
+BASE_PATH = '../../database/arr/'
 imagehash = {}
 urlPool = []
 
 if __name__ == '__main__':
+    if len(sys.argv)>1:
+        BASE_PATH = sys.argv[1]
+    if len(sys.argv)>2:
+        BEGIN = int(sys.argv[2])
+        END = int(sys.argv[3])
     cp = contentParser()
     pp = pageParser()
     def workOnUrl(url):
@@ -202,6 +220,7 @@ if __name__ == '__main__':
             f.close()
         else:
             print 'passing',url
+        sys.stdout.flush()
     for idx in xrange(BEGIN,END+1):
         cturl = CONTENT_BASE+str(idx)
         print 'working on',cturl,'after sleep 10'
@@ -215,10 +234,12 @@ if __name__ == '__main__':
         cp.work(ctstr)
         urlList = cp.getResult()
         for url in urlList:
-            #if url != 'img.htm?id=413':
-            #    continue
             workOnUrl(url)
-        for url in urlPool:
-            workOnUrl(url)
+        sys.stdout.flush()
+        
+    for url in urlPool:
+        workOnUrl(url)
+    #cturl = ''
+    #workOnUrl('img.htm?id=3899')
             
                 
