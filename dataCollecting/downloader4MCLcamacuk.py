@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-#downloader for http://ancientrome.ru/
+#downloader for http://museum.classics.cam.ac.uk/collections/casts
 
 from HTMLParser import HTMLParser
 import urllib2

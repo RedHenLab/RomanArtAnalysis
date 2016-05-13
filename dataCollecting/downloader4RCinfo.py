@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-#downloader for http://ancientrome.ru/
+#downloader for http://www.romancoins.info/
 
 from HTMLParser import HTMLParser
 import urllib2
