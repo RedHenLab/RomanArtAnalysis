@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 #Simple annotation tool for single binary label (default) or multi-class label (up to 10 for now)
-'''
+usage = '''
 usage: 
 Dependency: OpenCV python bindings (pip install pyopencv)
 
-Store all the images in a directory
+Store all the images in a single directory
 
-To run: python simpleAnnotationTool.py directory_containing_images [file_name_of_annotation_data(default annotation.txt) number_of_labels(default 2) ]
+To run: python simpleAnnotationTool.py path_to_the_directory_containing_images [file_name_of_annotation_data(default annotation.txt) number_of_labels(default 2) ]
 
 Press digit key to annotate (1 for label 0 (e.g. male statue), 2 for label 1 (e.g. female statue), ...)
 
@@ -36,6 +36,8 @@ def list_all(pdir,sdir):
 
 
 def key2label(key, numLabel = 2):
+    if key>255:
+        return -1
     lab = chr(key)
     if lab == 'q':
         return -2
@@ -52,7 +54,7 @@ def key2label(key, numLabel = 2):
 NUM_LABEL = 2
 labelFile = 'annotation.txt'
 if __name__ == '__main__':
-    assert len(sys.argv)>1
+    assert len(sys.argv)>1,usage
     basePath = sys.argv[1]
     if len(sys.argv)>2:
         labelFile = sys.argv[2]
