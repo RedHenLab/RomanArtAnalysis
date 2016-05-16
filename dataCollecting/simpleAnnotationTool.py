@@ -6,16 +6,41 @@ Dependency: OpenCV python bindings (pip install pyopencv)
 
 Store all the images in a single directory
 
-To run: python simpleAnnotationTool.py path_to_the_directory_containing_images [file_name_of_annotation_data(default annotation.txt) number_of_labels(default 2) ]
+To run: python simpleAnnotationTool.py Path_to_the_directory_containing_images Path_to_the_parameter_file 
 
-Press digit key to annotate (1 for label 0 (e.g. male statue), 2 for label 1 (e.g. female statue), ...)
+The parameter file should look like:
+
+key1 tag1
+key2 tag2
+...
+
+e.g.
+
+1 male
+2 female
+3 notSure
+
+The keys can be simple characters on the key board like 0,1,2,a,b,c, but q can not be used.
+
+
+Press key to annotate (map from keys to tags is in the parameter file)
+
+press space to skip current image
 
 The annotation file will be stored in the same directory with the images
+
+The file name is annotation__numberOfLabel-label0-label1-...-lastLabel__year-month-day_hh-mm-ss__randomNumber.txt
+
+e.g. annotation__3-male-female-notSure__2016-05-16_19-40-06__54.txt
+
+The random number from 0 to 99 is to avoid possible conflict
 
 Press q to quit
 '''
 import sys,os
 import cv2
+import time
+import random
 
 def list_dir(pdir):
     ls = os.listdir(pdir)
@@ -35,34 +60,46 @@ def list_all(pdir,sdir):
     return [list_images(os.path.join(pdir,d)) for d in sdir]
 
 
-def key2label(key, numLabel = 2):
+def key2label(key, keyMap):
     if key>255:
         return -1
     lab = chr(key)
-    if lab == 'q':
-        return -2
+    if lab == ' ':#press space will skip
+        return -3
+    if lab == 'q':#press q will quit
+        return -2 
     if not lab.isdigit():
         return -1
-    lab = int(lab)
-    lab = (lab-1 if lab>0 else 9)
-    if lab>-1 and lab<numLabel:
-        return lab
-    else:
+    if lab not in keyMap:
         return -1
+    else:
+        return lab
     
+def parseKey(keyFile):
+    lines = open(keyFile,'r').readlines()
+    num = len(lines)
+    desc = str(num)+'-'
+    kmap = {}
+    for line in lines:
+        sp = line.strip().split()
+        kmap[sp[0]] = sp[1]
+        desc = desc+sp[1]+'-'
+    return kmap,desc[:-1],num
 
 NUM_LABEL = 2
-labelFile = 'annotation.txt'
+labelFile = 'annotation'
 if __name__ == '__main__':
-    assert len(sys.argv)>1,usage
+    assert len(sys.argv)>2,usage
     basePath = sys.argv[1]
-    if len(sys.argv)>2:
-        labelFile = sys.argv[2]
-    if len(sys.argv)>3:
-        NUM_LABEL = int(sys.argv[3])
+    keyFile = sys.argv[2]
+    keyMap,keyDesc,NUM_LABEL = parseKey(keyFile)
+    labelFile = labelFile+'__'+keyDesc+'__'+time.strftime('%Y-%m-%d_%H-%M-%S')+'__'+str(random.randint(0,100))+'.txt'
+    #file name: prefix__numLabel-label0-label1-...-lastLabel__year-month-day_hh-mm-ss__randomNumber.txt
     images = list_images(basePath)
     cv2.namedWindow("Image to annotate")
     OF = open(os.path.join(basePath,labelFile),'w')
+    print >>OF, '#Image folder is',basePath
+    print >>OF, '#parameter file is',keyFile
     OF.close()
     for imn in images:
         img = cv2.imread(os.path.join(basePath,imn))
@@ -70,12 +107,16 @@ if __name__ == '__main__':
         label = -1
         while label < 0:
             pressed = cv2.waitKey(0)
-            label = key2label(pressed)
+            label = key2label(pressed,keyMap)
             if label == -2:
                 sys.exit()
+            if label == -3:
+                break
             if label < 0:
                 print 'key not valid'
+        if label <0:
+            continue #skip this image
         OF = open(os.path.join(basePath,labelFile),'a')
-        print >>OF,imn,label
+        print >>OF,imn,keyMap[label]
         OF.close()
            
