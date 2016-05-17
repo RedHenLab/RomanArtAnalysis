@@ -68,8 +68,8 @@ def key2label(key, keyMap):
         return -3
     if lab == 'q':#press q will quit
         return -2 
-    if not lab.isdigit():
-        return -1
+    #if not lab.isdigit():
+    #    return -1
     if lab not in keyMap:
         return -1
     else:
