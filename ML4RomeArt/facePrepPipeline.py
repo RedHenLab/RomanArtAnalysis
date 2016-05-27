@@ -107,7 +107,6 @@ if __name__ == '__main__':
         #print("Part 0: {}, Part 1: {} ...".format(shape.part(0),shape.part(1)))
         landmarks = list(map(lambda p: (p.x, p.y), shape.parts()))
         npLandmarks = np.float32(landmarks)
-        print d
         npLandmarkIndices = np.array(landmarkIndices)            
         H = cv2.getAffineTransform(npLandmarks[npLandmarkIndices],
                                 imgDim * MINMAX_TEMPLATE[npLandmarkIndices]+imgDim*(ENLARGE-1.0)/2)
@@ -115,4 +114,5 @@ if __name__ == '__main__':
         imPath, imName = os.path.split(f)
         print >>filterListFile, imName,d.left(),d.top(),d.right(),d.bottom(),landmarks
         io.imsave(os.path.join(outputDir,imName+'_crop.jpg'),thumbnail)
+        sys.stdout.flush()
         
