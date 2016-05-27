@@ -34,7 +34,8 @@ fieldMask1 = ['Attributes','Awarder','Beard','City','Clothing','Details','Earlie
 fieldMask2 = ['Page_title','Title','label','Keywords']
 key1 = [['male'],['female']]
 key2 = [['male','man'],['female','woman']]
-key3 = [['bearded', 'beard'],['clean-shaven','shaven']]
+key3 = [['bearded','long-bearded','short-bearded'],['clean-shaven','shaven']]
+key4 = [['long-bearded', 'long'],['short','short-bearded'],['stubble','stubble-bearded'],['clean-shaven','shaven']]
 def buildWordHash(df):
     portId, portStr = [], []
     for po,rc in df.iterrows():
@@ -121,8 +122,8 @@ if __name__ == '__main__':
     newDf  = totalDF[fieldMask1]
     portId,wdCount,vocabulary = buildWordHash(newDf)
    
-    data = buildFromField(newDf,imgList, filterd, 'Gender',key1, '_')
-    #data = buildFromField(newDf,imgList, filterd, 'Beard',key3, '_')
+    #data = buildFromField(newDf,imgList, filterd, 'Gender',key1, '_')
+    data = buildFromField(newDf,imgList, filterd, 'Beard',key4, '_')
     #data = buildFromWords(wdCount,portId, vocabulary, imgList, filterd, key2,'.jpg')
     print len(data)
     OF = open(sys.argv[3],'w')
