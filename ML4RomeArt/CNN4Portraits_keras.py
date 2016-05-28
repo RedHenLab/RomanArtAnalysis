@@ -25,7 +25,7 @@ from keras.regularizers import l2, activity_l2
 from keras.optimizers import SGD
 from keras.utils import np_utils
 from keras.models import model_from_json
-from sklearn.metrics import log_loss,accuracy_score
+from sklearn.metrics import log_loss,accuracy_score,confusion_matrix
 from numpy.random import permutation
 import keras
 
@@ -69,10 +69,11 @@ def get_po_data(dataStr):
     return [(line.strip().split()[0],int(line.strip().split()[1])) for line in lines]
 
 
-def load_train(img_rows, img_cols, dataStr, color_type=1):
+def load_train(img_rows, img_cols, dataStr, color_type=1, withID = False):
     X_train = []
     y_train = []
-
+    if withID:
+        po_id = []
     po_data = get_po_data(dataStr)
 
     print('Read train images')
@@ -80,10 +81,17 @@ def load_train(img_rows, img_cols, dataStr, color_type=1):
         img = get_im(fl, img_rows, img_cols, color_type)
         X_train.append(img)
         y_train.append(j)
-
-    return X_train, y_train
-
-
+        if withID:
+            fpath,fname = os.path.split(fl)
+            po_id.append(fname[:fname.find('_')])
+            #use image name before first _ as object id
+    if withID:
+        unique_po = sorted(list(set(po_id)))
+        print('Unique objects: {}'.format(len(unique_po)))
+        #print(unique_po)
+        return X_train, y_train, po_id, unique_po
+    else:
+        return X_train, y_train
 
 
 def cache_data(data, path):
@@ -134,21 +142,34 @@ def split_validation_set(train, target, test_size):
 
 
 def read_and_normalize_and_shuffle_train_data(img_rows, img_cols, dataStr,
-                                              color_type=1,shuffle = True):
-
+                                              color_type=1,shuffle = True, withID = False):
+    if withID:
+        suffix = '_withID.dat'
+    else:
+        suffix = '.dat'
     cache_path = os.path.join('cache', 'train_dataName_'+dataStr+'_r_' + str(img_rows) +
                               '_c_' + str(img_cols) + '_t_' +
-                              str(color_type) + '.dat')
-
+                              str(color_type) + suffix)
     if not os.path.isfile(cache_path) or use_cache == 0:
-        train_data, train_target = \
-            load_train(img_rows, img_cols, dataStr, color_type)
-        cache_data((train_data, train_target),
+        if withID:
+            train_data, train_target, po_id, unique_po = \
+                load_train(img_rows, img_cols, dataStr, color_type, withID)
+            cache_data((train_data, train_target, po_id, unique_po),
                    cache_path)
+        else:
+            train_data, train_target = \
+                load_train(img_rows, img_cols, dataStr, color_type, withID)
+            cache_data((train_data, train_target),
+                       cache_path)
     else:
         print('Restore train from cache!')
-        (train_data, train_target) = \
-            restore_data(cache_path)
+        if withID:
+            (train_data, train_target, po_id, unique_po) = \
+                restore_data(cache_path)
+            print 'Unique objects',len(unique_po)
+        else:
+            (train_data, train_target) = \
+                restore_data(cache_path)
 
     train_data = np.array(train_data, dtype=np.float32)
     train_target = np.array(train_target, dtype=np.uint8)
@@ -173,10 +194,14 @@ def read_and_normalize_and_shuffle_train_data(img_rows, img_cols, dataStr,
         perm = permutation(len(train_target))
         train_data = train_data[perm]
         train_target = train_target[perm]
+        if withID:
+            po_id = [po_id[perm[i]] for i in xrange(len(perm))]
     print('Train shape:', train_data.shape)
     print(train_data.shape[0], 'train samples')
-    return train_data, train_target, numLabel
-
+    if withID:
+        return train_data, train_target, po_id, unique_po, numLabel
+    else:
+        return train_data, train_target, numLabel
 
 
 
@@ -186,6 +211,22 @@ def dict_to_list(d):
         ret.append(i[1])
     return ret
 
+def copy_selected_po(train_data, train_target, po_id, po_list):
+    data = []
+    target = []
+    index = []
+    po_hash = {}
+    for i in xrange(len(po_list)):
+        po_hash[po_list[i]] = True
+    for i in xrange(len(po_id)):
+        if po_id[i] in po_hash:
+            data.append(train_data[i])
+            target.append(train_target[i])
+            index.append(i)
+    data = np.asarray(data, dtype=np.float32)
+    target = np.asarray(target, dtype=np.float32)
+    index = np.asarray(index, dtype=np.uint32)
+    return data, target, index
 
 def vgg_std16_model(img_rows, img_cols, color_type=1):
     model = Sequential()
@@ -253,25 +294,27 @@ def vgg_simple_model(img_rows, img_cols, color_type=1, outputLen = 2, _lr = 1e-2
     model = Sequential()
     model.add(ZeroPadding2D((1, 1), input_shape=(color_type,
                                                  img_rows, img_cols)))
-    model.add(Convolution2D(32, 3, 3, activation='relu', W_regularizer=l2(0.005)))
+    conv_wd = 0.01
+    fc_wd = 0.05
+    model.add(Convolution2D(32, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
     #model.add(PReLU())
     model.add(MaxPooling2D((2, 2), strides=(2, 2)))
     #model.add(Dropout(0.5))
 
     model.add(ZeroPadding2D((1, 1)))
-    model.add(Convolution2D(64, 3, 3, activation='relu', W_regularizer=l2(0.005)))
+    model.add(Convolution2D(64, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
     #model.add(PReLU())
     model.add(MaxPooling2D((2, 2), strides=(2, 2)))
     #model.add(Dropout(0.5))
         
     model.add(ZeroPadding2D((1, 1)))
-    model.add(Convolution2D(128, 3, 3, activation='relu', W_regularizer=l2(0.005)))
+    model.add(Convolution2D(128, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
     #model.add(PReLU())
     model.add(MaxPooling2D((2, 2), strides=(2, 2)))
     #model.add(Dropout(0.5))
 
     model.add(ZeroPadding2D((1, 1)))
-    model.add(Convolution2D(256, 3, 3, activation='relu', W_regularizer=l2(0.005)))
+    model.add(Convolution2D(256, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
     #model.add(PReLU())
     model.add(MaxPooling2D((2, 2), strides=(2, 2)))
 
@@ -280,7 +323,7 @@ def vgg_simple_model(img_rows, img_cols, color_type=1, outputLen = 2, _lr = 1e-2
     #model.add(Dense(256, activation='relu'))
     #model.add(PReLU())
     model.add(Dropout(0.5))
-    model.add(Dense(outputLen, activation='softmax', W_regularizer=l2(0.01)))
+    model.add(Dense(outputLen, activation='softmax', W_regularizer=l2(fc_wd)))
 
     #model.load_weights('../pre-trained/vgg16_weights.h5')
 
@@ -324,90 +367,132 @@ def forceBalance(x,y):
     return x,y
 
 class simplePrint(keras.callbacks.Callback):
-
     def on_epoch_end(self, epoch, logs={}):
         print 'epoch',epoch,'done, loss',logs['loss'],'acc',logs['acc'],'val_loss',logs['val_loss'],'val_acc',logs['val_acc']
+        if logs['val_acc'] > self.best:
+            self.best = logs['val_acc']
+    def resetBest(self,mode = 'max'):
+        if mode == 'max':
+            self.best = -1e100
+        else:
+            self.best = 1e100
+            
         
-def run_cross_validation(dataStr, nfolds=5, nb_epoch=10, modelStr='', lr = 1e-2):
+def run_cross_validation(dataStr, nfolds=5, nb_epoch=10, modelStr='', lr = 1e-2, withID = False):
 
     # input image dimensions
     #img_rows, img_cols = 224, 224
     img_rows, img_cols = global_rows_cols
     batch_size = 128
     random_state = global_split_random
-
-    train_data, train_target, outputLen = \
-        read_and_normalize_and_shuffle_train_data(img_rows, img_cols, dataStr,
-                                                  color_type_global, shuffle = False)
-
+    if withID:
+        train_data, train_target, po_id, unique_po, outputLen = \
+            read_and_normalize_and_shuffle_train_data(img_rows, img_cols, dataStr,
+                                                      color_type_global, shuffle = True, withID = withID)
+    else:
+        train_data, train_target, outputLen = \
+            read_and_normalize_and_shuffle_train_data(img_rows, img_cols, dataStr,
+                                                      color_type_global, shuffle = False, withID = withID)
     num_fold = 0
-    kf = KFold(train_data.shape[0], n_folds=nfolds,
-               shuffle=True, random_state=random_state)
+    if withID:
+        kf = KFold(len(unique_po), n_folds=nfolds,
+                   shuffle=True, random_state=random_state)
+    else:
+        kf = KFold(train_data.shape[0], n_folds=nfolds,
+                   shuffle=True, random_state=random_state)
+    totalVal = []
     for train_po, test_po in kf:
         num_fold += 1
         print('Start KFold number {} from {}'.format(num_fold, nfolds))
-        #train_data_d, train_target_d = train_data[train_po], train_target[train_po]
-        #val_data, val_target = train_data[test_po], train_target[test_po]
-        train_data_d, train_target_d = forceBalance(train_data[train_po], train_target[train_po])
-        val_data, val_target = forceBalance(train_data[test_po], train_target[test_po])
+        if withID:
+            train_dl = [unique_po[train_po[i]] for i in xrange(len(train_po)) ]
+            test_dl = [unique_po[test_po[i]] for i in xrange(len(test_po)) ]
+            train_data_d, train_target_d, trainIdx = copy_selected_po(train_data, train_target, po_id, train_dl)
+            val_data, val_target, valIdx = copy_selected_po(train_data, train_target, po_id, test_dl)
+        else:
+            train_data_d, train_target_d = train_data[train_po], train_target[train_po]
+            val_data, val_target = train_data[test_po], train_target[test_po]
+        train_data_d, train_target_d = forceBalance(train_data_d, train_target_d)
+        val_data, val_target = forceBalance(val_data, val_target)
         model = vgg_simple_model(img_rows, img_cols, color_type_global, outputLen, lr)
         print 'model loaded'
         checkPoints = ModelCheckpoint('cache/'+dataStr+'_'+modelStr+'_fold_'+str(num_fold)+'weights.best.hdf5',
                                       monitor='val_acc', verbose=1, save_best_only=True, mode='max')
-        earlyStops = EarlyStopping(monitor='val_acc', patience=150, verbose=1, mode='max')
+        earlyStops = EarlyStopping(monitor='val_acc', patience=100, verbose=1, mode='max')
         simplePrints = simplePrint()
+        simplePrints.resetBest(mode = 'max')
         model.fit(train_data_d, train_target_d, batch_size=batch_size,
                   nb_epoch=nb_epoch,
                   show_accuracy=True, verbose=0,
                   callbacks = [checkPoints,earlyStops,simplePrints],
                   validation_split=0.0, shuffle=True, validation_data = (val_data,val_target))
-
-
+        print 'best val is',simplePrints.best
+        totalVal.append(simplePrints.best)
         save_model(model, num_fold, modelStr, dataStr)
+    print 'average validation score',np.mean(totalVal),'+/-',np.std(totalVal)
 
 
 
 
-def cv_validate_with_best_epoch(dataStr, best_models, save_path = None):
+def cv_validate_with_best_epoch(dataStr, best_models, save_path = None, withID = False):
     # Now it loads color image
     # input image dimensions
     img_rows, img_cols = global_rows_cols
     batch_size = 256
     random_state = global_split_random
     nfolds = len(best_models)
-    train_data, train_target, outputLen = \
-        read_and_normalize_and_shuffle_train_data(img_rows, img_cols,dataStr,
-                                                  color_type_global,shuffle = False)
+    if withID:
+        train_data, train_target, po_id, unique_po, outputLen = \
+            read_and_normalize_and_shuffle_train_data(img_rows, img_cols, dataStr,
+                                                      color_type_global, shuffle = True, withID = withID)
+    else:
+        train_data, train_target, outputLen = \
+            read_and_normalize_and_shuffle_train_data(img_rows, img_cols, dataStr,
+                                                      color_type_global, shuffle = False, withID = withID)
     num_fold = 0
-    kf = KFold(train_data.shape[0], n_folds=nfolds,
-               shuffle=True, random_state=random_state)
+    if withID:
+        kf = KFold(len(unique_po), n_folds=nfolds,
+                   shuffle=True, random_state=random_state)
+    else:
+        kf = KFold(train_data.shape[0], n_folds=nfolds,
+                   shuffle=True, random_state=random_state)
     predictions_all = np.ndarray((train_data.shape[0], outputLen), dtype=np.float32) 
     for train_po, test_po in kf:
         num_fold += 1
         print('Start KFold number {} from {}'.format(num_fold, nfolds))
-        val_data, val_target = train_data[test_po], train_target[test_po]
+        if withID:
+            test_dl = [unique_po[test_po[i]] for i in xrange(len(test_po)) ]
+            val_data, val_target, valIdx = copy_selected_po(train_data, train_target, po_id, test_dl)
+        else:
+            val_data, val_target = train_data[test_po], train_target[test_po]
         model = read_model_any(best_models[num_fold-1][0],best_models[num_fold-1][1])
         print 'model loaded'        
         predictions_valid = model.predict(val_data, batch_size=batch_size, verbose=1)
-        predictions_all[test_po]=predictions_valid
+        if withID:
+            predictions_all[valIdx]=predictions_valid
+        else:
+            predictions_all[test_po]=predictions_valid
     if save_path is not None:
         cache_data((predictions_all,np.argmax(train_target,axis = 1)), save_path)
     score = log_loss(train_target, predictions_all)
     accuracy = accuracy_score(np.argmax(train_target,axis = 1), np.argmax(predictions_all,axis = 1))
+    conf_mat = confusion_matrix(np.argmax(train_target,axis = 1), np.argmax(predictions_all,axis = 1))
     print('Score log_loss, accuracy: ', score,accuracy)
+    print 'confusion matrix'
+    print conf_mat
     return predictions_all
 
 
 # nfolds, nb_epoch, split
-run_cross_validation('merge.gender-2',10, 500, 'vgg_5_0.5e-2_10x500',lr = 0.5e-2)
+#run_cross_validation('merge.gender-2',10, 500, '_vgg_5_0.5e-2_10x500_valbyobj',lr = 0.5e-2, withID = True)
+#run_cross_validation('ls.ox.uk.beard-4',10, 500, '_vgg_5_1e-2_10x500_valbyobj',lr = 1e-2, withID = True)
 
 
-def cv_validate_with_best_epoch_wrapper(dataStr, modelStr, nFold, cache_path):
+def cv_validate_with_best_epoch_wrapper(dataStr, modelStr, nFold, cache_path, withID = False):
     models = [(dataStr+'_architecture'+str(i+1)+modelStr+'.json', dataStr+'_'+modelStr+'_fold_'+str(i+1)+'weights.best.hdf5') for i in xrange(nFold)]
-    cv_validate_with_best_epoch(dataStr, models, cache_path)
+    cv_validate_with_best_epoch(dataStr, models, cache_path, withID)
 
-cache_path = os.path.join('cache', 'val_merge.gender-2_bestval.dat')
-cv_validate_with_best_epoch_wrapper('merge.gender-2','vgg_5_0.5e-2_10x500',10,cache_path)
-#pred = cv_validate_with_best_epoch(models, cache_path)
-#test_model_and_submit_any_wrapper_he('_vgg_16_full_3x12_0.025val', 2, 'high_epoch_vgg_16_full_0.25e-3_2x12_0.025val')
-#test_model_and_submit_any_wrapper_he('_vgg_16_full_3x12_0.025val', 3, 'high_epoch_vgg_16_full_0.25e-3_3x12_0.025val')
+#cache_path = os.path.join('cache', 'val_merge.gender-2_bestval.dat')
+#cv_validate_with_best_epoch_wrapper('merge.gender-2','_vgg_5_0.5e-2_10x500_valbyobj',10,cache_path, withID =True)
+cache_path = os.path.join('cache', 'ls.ox.uk.beard-4_bestval.dat')
+cv_validate_with_best_epoch_wrapper('ls.ox.uk.beard-4','_vgg_5_1e-2_10x500_valbyobj',10,cache_path, withID =True)
