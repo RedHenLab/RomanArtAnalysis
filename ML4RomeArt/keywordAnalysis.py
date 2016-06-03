@@ -65,12 +65,17 @@ if __name__ == '__main__':
         sortedWordCount[:,ct] = wdCount[:,idx].toarray().flatten()
     corr = np.corrcoef(sortedWordCount,rowvar = 0)
     cooccs = countCoocc(sortedWordCount)
+    absCorr = np.abs(corr)
     #print corr.shape
     corrMax = []
+    absCorrMax = []
     for i in xrange(corr.shape[0]):
         ars = list(np.argsort(corr[i,:])[-MAX_NUM:])
         ars.reverse()
         corrMax.append(ars)
+        ars = list(np.argsort(absCorr[i,:])[-MAX_NUM:])
+        ars.reverse()
+        absCorrMax.append(ars)
 
     OF = open(RESULT_PATH+'wordCount.csv','w')
     for s in stats:
@@ -108,3 +113,12 @@ if __name__ == '__main__':
             tstr = tstr+ stats[idx][0]+','+"{:.4f}".format(corr[i,idx])+','
         print>>OF,tstr[:-1]
     OF.close()
+
+    OF = open(RESULT_PATH+'absoluteCorrelationSort.csv','w')
+    for i in xrange(len(absCorrMax)):
+        tstr = stats[i][0]+','
+        for idx in absCorrMax[i][1:]:
+            tstr = tstr+ stats[idx][0]+','+"{:.4f}".format(corr[i,idx])+','
+        print>>OF,tstr[:-1]
+    OF.close()
+
