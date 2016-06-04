@@ -21,6 +21,7 @@ class DeconvNet(object):
 
         # Tensor for function definitions
         self.x = K.T.tensor4('x')
+        self.mask = K.T.tensor4('mask')
 
     def __getitem__(self, layer_name):
         try:
@@ -28,7 +29,7 @@ class DeconvNet(object):
         except KeyError:
             print "Erroneous layer name"
 
-    def _deconv(self, X, lname, d_switch, feat_map=None):
+    def _deconv(self, X, lname):
         o_width, o_height = self[lname].output_shape[-2:]
 
         # Get filter size
@@ -43,23 +44,9 @@ class DeconvNet(object):
         assert isinstance(pad_width, int), "Pad width size issue at layer %s" % lname
         assert isinstance(pad_height, int), "Pad height size issue at layer %s" % lname
 
-        # Set to zero based on switch values
-        X[d_switch[lname]] = 0
         # Get activation function
         activation = self[lname].activation
         X = activation(X)
-        if feat_map is not None:
-            print "Setting other feat map to zero"
-            for i in range(X.shape[1]):
-                if i != feat_map:
-                    X[:,i,:,:] = 0
-            print "Setting non max activations to zero"
-            for i in range(X.shape[0]):
-                iw, ih = np.unravel_index(
-                    X[i,feat_map,:,:].argmax(), X[i,feat_map,:,:].shape)
-                m = np.max(X[i,feat_map,:,:])
-                X[i,feat_map,:,:] = 0
-                X[i,feat_map,iw,ih] = m
         # Get filters. No bias for now
         W = self[lname].W
         # Transpose filter
@@ -68,12 +55,12 @@ class DeconvNet(object):
         # CUDNN for conv2d ?
         conv_out = K.T.nnet.conv2d(input=self.x, filters=W, border_mode='valid')
         # Add padding to get correct size
-        pad = K.function([self.x], K.spatial_2d_padding(
+        pad = K.function([self.x,K.learning_phase()], K.spatial_2d_padding(
             self.x, padding=(pad_width, pad_height), dim_ordering="th"))
-        X_pad = pad([X])
+        X_pad = pad([X,1])
         # Get Deconv output
-        deconv_func = K.function([self.x], conv_out)
-        X_deconv = deconv_func([X_pad])
+        deconv_func = K.function([self.x,K.learning_phase()], conv_out)
+        X_deconv = deconv_func([X_pad,1])
         assert X_deconv.shape[-2:] == (o_width, o_height),\
             "Deconv output at %s has wrong size" % lname
         return X_deconv
@@ -86,53 +73,54 @@ class DeconvNet(object):
         layer_index = self.lnames.index(target_layer)
         for lname in self.lnames[:layer_index + 1]:
             # Get layer output
-            inc, out = self[lname].input, self[lname].output
-            f = K.function([inc], out)
-            X = f([X])
-            if "convolution2d" in lname:
-                d_switch[lname] = np.where(X <= 0)
+            layer = self[lname]
+            inc, out = layer.input, layer.output
+            f = K.function([inc,K.learning_phase()], out)
+            Y = f([X,1])
+            if "maxpooling2d" in lname:
+                #print lname,layer.strides,layer.pool_size
+                #print X.shape,Y.shape
+                strides, pool_size = layer.strides,layer.pool_size
+                assert strides[0] >= pool_size[0] and strides[1] >= pool_size[1],\
+                    "strides must be greater than or equal to pool_size, layer %s" % lname
+                d_switch[lname] = np.zeros(X.shape,dtype = 'int')
+                for didx in xrange(X.shape[0]):
+                    for blocks_x in xrange(Y.shape[2] ):
+                        for blocks_y in xrange( Y.shape[3] ):
+                            this_block = X[didx,:, ( blocks_x  ) * strides[0] : blocks_x * strides[0]+pool_size[0],
+                                           ( blocks_y  ) * strides[1] : blocks_y * strides[1]+pool_size[1] ]
+                            amax = np.argmax(this_block.reshape((this_block.shape[0],-1)),axis = 1)
+                            for ch in xrange(X.shape[1]):
+                                d_switch[lname][didx,ch,( blocks_x  ) * strides[0] + amax[ch]/pool_size[1],( blocks_y  ) * strides[1] + amax[ch]%pool_size[1]] = 1
+            X = Y
         return d_switch
 
     def _backward_pass(self, X, target_layer, d_switch, feat_map):
         # Run deconv/maxunpooling until input pixel space
         layer_index = self.lnames.index(target_layer)
         # Get the output of the target_layer of interest
-        layer_output = K.function([self[self.lnames[0]].input], self[target_layer].output)
-        X_outl = layer_output([X])
+        layer_output = K.function([self[self.lnames[0]].input,K.learning_phase()], self[target_layer].output)
+        X_outl = layer_output([X,1])
         # Special case for the starting layer where we may want
         # to switchoff somes maps/ activations
-        print "Deconvolving %s..." % target_layer
-        if "maxpooling2d" in target_layer:
-            X_maxunp = K.pool.max_pool_2d_same_size(
-                self[target_layer].input, self[target_layer].pool_size)
-            unpool_func = K.function([self[self.lnames[0]].input], X_maxunp)
-            X_outl = unpool_func([X])
-            if feat_map is not None:
-                for i in range(X_outl.shape[1]):
-                    if i != feat_map:
-                        X_outl[:,i,:,:] = 0
-                for i in range(X_outl.shape[0]):
-                    iw, ih = np.unravel_index(
-                        X_outl[i,feat_map,:,:].argmax(), X_outl[i,feat_map,:,:].shape)
-                    m = np.max(X_outl[i,feat_map,:,:])
-                    X_outl[i,feat_map,:,:] = 0
-                    X_outl[i,feat_map,iw,ih] = m
-        elif "convolution2d" in target_layer:
-            X_outl = self._deconv(X_outl, target_layer, d_switch, feat_map=feat_map)
-        else:
-            raise ValueError(
-                "Invalid layer name: %s \n Can only handle maxpool and conv" % target_layer)
+        print "Deconvolving from %s..." % target_layer
+        if feat_map is not None:
+            print "Set other activation than channel %d to 0" % feat_map
+            for i in range(X_outl.shape[1]):
+                if i != feat_map:
+                    X_outl[:,i,:,:] = 0
         # Iterate over layers (deepest to shallowest)
-        for lname in self.lnames[:layer_index][::-1]:
+        for lname in self.lnames[:layer_index+1][::-1]:
             print "Deconvolving %s..." % lname
             # Unpool, Deconv or do nothing
             if "maxpooling2d" in lname:
                 p1, p2 = self[lname].pool_size
-                uppool = K.function([self.x], K.resize_images(self.x, p1, p2, "th"))
-                X_outl = uppool([X_outl])
-
+                uppool = K.function([self.x,self.mask,K.learning_phase()], K.resize_images(self.x, p1, p2, "th")*self.mask)
+                X_outl = uppool([X_outl,d_switch[lname],1])
+                #print d_switch[lname][0,feat_map,:,:]
+                #print X_outl[0,feat_map,:,:]
             elif "convolution2d" in lname:
-                X_outl = self._deconv(X_outl, lname, d_switch)
+                X_outl = self._deconv(X_outl, lname)
             elif "padding" in lname:
                 pass
             else:
