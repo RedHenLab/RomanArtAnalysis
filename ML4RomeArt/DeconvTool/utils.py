@@ -408,7 +408,7 @@ def plot_deconv(img_index, data, Dec, target_layer, feat_map, save=False):
     max_delta_x = 0
     max_delta_y = 0
 
-    # To crop images:
+    '''# To crop images:
     # First loop to get the largest image size required (bounding box)
     for k in range(X_deconv.shape[0]):
         arr = np.argwhere(np.max(X_deconv[k], axis=0))
@@ -423,14 +423,14 @@ def plot_deconv(img_index, data, Dec, target_layer, feat_map, save=False):
             max_delta_x = delta_x
         if delta_y > max_delta_y:
             max_delta_y = delta_y
-
+    '''
     list_deconv = []
     list_ori = []
 
     # Then loop to crop all images to the same size
     for k in range(X_deconv.shape[0]):
         arr = np.argwhere(np.max(X_deconv[k], axis=0))
-        try:
+        '''try:
             (ystart, xstart), (ystop, xstop) = arr.min(0), arr.max(0) + 1
         except ValueError:
             print "Encountered a dead filter, retry with different img/filter"
@@ -445,10 +445,12 @@ def plot_deconv(img_index, data, Dec, target_layer, feat_map, save=False):
         if x_max >= X_deconv[k].shape[-1]:
             x_min = x_min - (x_max - X_deconv[k].shape[-1])
             x_max = X_deconv[k].shape[-1]
-
+        '''
         # Store the images in the dict
-        arr_deconv = X_deconv[k, :, y_min: y_max, x_min: x_max]
-        arr_ori = X_ori[k, :, y_min: y_max, x_min: x_max]
+        #arr_deconv = X_deconv[k, :, y_min: y_max, x_min: x_max]
+        #arr_ori = X_ori[k, :, y_min: y_max, x_min: x_max]
+        arr_deconv = X_deconv[k,:,:,:]
+        arr_ori = X_ori[k,:,:,:]
 
         list_ori.append(arr_ori)
         list_deconv.append(arr_deconv)
@@ -479,7 +481,8 @@ def plot_deconv(img_index, data, Dec, target_layer, feat_map, save=False):
     del arr_full_copy
 
     # Plot and prettify
-    plt.imshow(arr_full, aspect='auto')
+    plt.figure(figsize=(16,8))
+    plt.imshow(arr_full)#, aspect='auto')
     plt.tick_params(axis='both', which='both', bottom='off', top='off',
                     labelbottom='off', right='off', left='off', labelleft='off')
     plt.xlabel(target_layer + "Filter: %s" % feat_map, fontsize=26)
@@ -488,7 +491,7 @@ def plot_deconv(img_index, data, Dec, target_layer, feat_map, save=False):
     if save:
         if not os.path.exists("./Figures/"):
             os.makedirs("./Figures")
-        plt.savefig("./Figures/sample_%s.png" % target_layer, format='png', dpi=200)
+        plt.savefig("./Figures/sample_%s_%s.png" % (target_layer,feat_map), format='png', dpi=200)
     else:
         plt.show()
         raw_input()

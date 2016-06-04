@@ -13,81 +13,16 @@ from utils import plot_max_activation
 from utils import find_top9_mean_act
 import glob
 import cv2
-import os
+import sys,os
+parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parentdir)
+from CNN4Portraits_keras import get_im,cache_data,restore_data,read_model_any,mean_pixel,preprocess_data
+from sampleSubsetImages import sampleEqualSubset
+# color type: 1 - grey, 3 - rgb
+color_type_global = 1
 
-
-def VGG_16(weights_path=None):
-    """
-    VGG Model Keras specification
-
-    args: weights_path (str) trained weights file path
-
-    returns model (Keras model)
-    """
-
-    model = Sequential()
-    model.add(ZeroPadding2D((1,1),input_shape=(3,224,224)))
-    model.add(Convolution2D(64, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(64, 3, 3, activation='relu'))
-    model.add(MaxPooling2D((2,2), strides=(2,2)))
-
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(128, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(128, 3, 3, activation='relu'))
-    model.add(MaxPooling2D((2,2), strides=(2,2)))
-
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(256, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(256, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(256, 3, 3, activation='relu'))
-    model.add(MaxPooling2D((2,2), strides=(2,2)))
-
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
-    model.add(MaxPooling2D((2,2), strides=(2,2)))
-
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
-    model.add(ZeroPadding2D((1,1)))
-    model.add(Convolution2D(512, 3, 3, activation='relu'))
-    model.add(MaxPooling2D((2,2), strides=(2,2)))
-
-    model.add(Flatten())
-    model.add(Dense(4096, activation='relu'))
-    model.add(Dropout(0.5))
-    model.add(Dense(4096, activation='relu'))
-    model.add(Dropout(0.5))
-    model.add(Dense(1000, activation='softmax'))
-
-    if weights_path:
-        print "Loading weights..."
-        model.load_weights(weights_path)
-
-    return model
-
-
-def load_model(weights_path):
-    """
-    Load and compile VGG model
-
-    args: weights_path (str) trained weights file path
-
-    returns model (Keras model)
-    """
-
-    model = VGG_16(weights_path)
-    model.compile(optimizer="sgd", loss='categorical_crossentropy')
-    return model
+global_rows_cols = (64 , 64)
+DRAW_NUM = 256
 
 if __name__ == "__main__":
 
@@ -98,21 +33,30 @@ if __name__ == "__main__":
     Dec = None  # Initialise DeconvNet model to None
     if not os.path.exists("./Figures/"):
         os.makedirs("./Figures/")
-
     ############
     # Load data
     ############
-    list_img = glob.glob("./Data/Img/*.jpg*")
-    assert len(list_img) > 0, "Put some images in the ./Data/Img folder"
+    if len(sys.argv) == 5:
+        list_img = sampleEqualSubset(sys.argv[1],DRAW_NUM/2, int(sys.argv[4]))
+    else:
+        list_img = glob.glob(os.path.join(sys.argv[1],"*.jpg"))
+    assert len(list_img) > 0, "no images in the folder"
     data = []
     for im_name in list_img:
-        im = cv2.resize(cv2.imread(im_name), (224, 224)).astype(np.float32)
-        im[:,:,0] -= 103.939
-        im[:,:,1] -= 116.779
-        im[:,:,2] -= 123.68
-        im = im.transpose((2,0,1))
+        im = get_im(im_name,global_rows_cols[0],global_rows_cols[1],color_type_global)
         data.append(im)
-    data = np.array(data)
+    data = np.array(data,dtype= 'float')
+    data = preprocess_data(data,global_rows_cols[0],global_rows_cols[1],color_type_global)
+    
+    archF = sys.argv[2]
+    weightsF = sys.argv[3]
+
+    if not model:
+        model = read_model_any(archF,weightsF)
+    if not Dec:
+        Dec = KerasDeconv.DeconvNet(model)
+
+    print 'haha'
 
     ###############################################
     # Action 1) Get max activation for a slection of feat maps
@@ -164,15 +108,14 @@ if __name__ == "__main__":
     # Action 4) Get deconv images of some images for some
     # feat map
     ###############################################
-    deconv_specific = False
+    deconv_specific = True
     if deconv_specific:
-        if not model:
-            model = load_model('./Data/vgg16_weights.h5')
-        if not Dec:
-            Dec = KerasDeconv.DeconvNet(model)
-        target_layer = "convolution2d_13"
-        feat_map = 12
-        num_img = 25
+        target_layer = "dense_1"
+        feat_map = 0
+        num_img = DRAW_NUM
+        np.random.seed()
         img_index = np.random.choice(data.shape[0], num_img, replace=False)
-        plot_deconv(img_index, data, Dec, target_layer, feat_map)
+        img_index = sorted(img_index)
+        plot_deconv(img_index, data, Dec, target_layer, feat_map, save = True)
+        plot_deconv(img_index, data, Dec, target_layer, 1-feat_map, save = True)
 
