@@ -35,7 +35,7 @@ class DeconvNet(object):
         if conv_input_shape is None:
             o_width, o_height = self[lname].output_shape[-2:]
         else:
-            o_width, o_height = conv_input_shape[-2:]
+            o_width, o_height = self.input_shape_withoutpadding[lname][-2:]
         if W is None:
             # Get filters. No bias for now
             W = self[lname].W
@@ -90,12 +90,15 @@ class DeconvNet(object):
         
 
     def _forward_pass(self, X, target_layer):
-
+        last_shape = X.shape #shape first be the size of input image
         # For all layers up to the target layer
         # Store the max activation in switch
         d_switch = {}
+        input_shape_withoutpadding = {}
         layer_index = self.lnames.index(target_layer)
         for lname in self.lnames[:layer_index + 1]:
+            input_shape_withoutpadding[lname] = last_shape
+            #skip all the padding and flatten layer, only record shape from conv, pooling and dense
             # Get layer output
             layer = self[lname]
             inc, out = layer.input, layer.output
@@ -116,15 +119,23 @@ class DeconvNet(object):
                             amax = np.argmax(this_block.reshape((this_block.shape[0],-1)),axis = 1)
                             for ch in xrange(X.shape[1]):
                                 d_switch[lname][didx,ch,( blocks_x  ) * strides[0] + amax[ch]/pool_size[1],( blocks_y  ) * strides[1] + amax[ch]%pool_size[1]] = 1
+                last_shape = self[lname].output_shape
+            if "convolution2d" in lname:
+                #print self[lname].output_shape
+                last_shape = self[lname].output_shape
+            if "dense" in lname:
+                #print self[lname].output_shape
+                last_shape = self[lname].output_shape
+                
             X = Y
-        return d_switch
+        return d_switch, input_shape_withoutpadding
 
     def _backward_pass(self, X, target_layer, d_switch, feat_map):
         # Run deconv/maxunpooling until input pixel space
         layer_index = self.lnames.index(target_layer)
         # Get the output of the target_layer of interest
         if layer_index == len(self.lnames)-1:
-            print 'use none softmax'
+            print 'use none softmax activation'
             layer_output = K.function([self[self.lnames[0]].input,K.learning_phase()], K.dot(self[self.lnames[-2]].output,self[target_layer].W)+self[target_layer].b)
         else:
             layer_output = K.function([self[self.lnames[0]].input,K.learning_phase()], self[target_layer].output)
@@ -138,13 +149,17 @@ class DeconvNet(object):
             for i in range(X_outl.shape[1]):
                 if i != feat_map:
                     if len(X_outl.shape)<4:
-                        X_outl[:,i] = 0
+                        if layer_index == len(self.lnames)-1:
+                            print 'use softmax offset',softmax_offset
+                            X_outl[:,i] = -abs(softmax_offset)/2
+                        #X_outl[:,i] = 0
                     else:
                         X_outl[:,i,:,:] = 0
                 else:
+                    #pass
                     if layer_index == len(self.lnames)-1:
                         print 'use softmax offset',softmax_offset
-                        X_outl[:,i] = abs(softmax_offset)
+                        X_outl[:,i] = abs(softmax_offset)/2
                     
         #print X_outl[:,feat_map]
         #print X_outl[:,1-feat_map]
@@ -170,7 +185,7 @@ class DeconvNet(object):
             elif "dropout" in lname:
                 pass
             elif "dense" in lname:
-                X_outl = self._dedense(X_outl, lname, input_c = 256)
+                X_outl = self._dedense(X_outl, lname, input_c = self.input_shape_withoutpadding[lname][1])
             else:
                 raise ValueError(
                     "Invalid layer name: %s \n Can only handle maxpool and conv" % lname)
@@ -189,7 +204,7 @@ class DeconvNet(object):
         # Forward pass storing switches
         print "Starting forward pass..."
         start_time = time.time()
-        d_switch = self._forward_pass(X, target_layer)
+        d_switch, self.input_shape_withoutpadding = self._forward_pass(X, target_layer)
         end_time = time.time()
         print 'Forward pass completed in %ds' % (end_time - start_time)
         # Then deconvolve starting from target layer
