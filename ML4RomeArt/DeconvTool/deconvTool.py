@@ -111,11 +111,10 @@ if __name__ == "__main__":
     deconv_specific = True
     if deconv_specific:
         target_layer = "dense_1"
-        feat_map = 0
         num_img = DRAW_NUM
         np.random.seed()
         img_index = np.random.choice(data.shape[0], num_img, replace=False)
         img_index = sorted(img_index)
-        plot_deconv(img_index, data, Dec, target_layer, feat_map, save = True)
-        plot_deconv(img_index, data, Dec, target_layer, 1-feat_map, save = True)
+        for feat_map in xrange(int(sys.argv[4])):
+            plot_deconv(img_index, data, Dec, target_layer, feat_map, save = True)
 
