@@ -11,6 +11,7 @@ from sklearn import metrics as met
 from sklearn.pipeline import Pipeline
 import glob
 import pandas as pd
+import math
 
 import cv2
 import dlib
@@ -176,11 +177,19 @@ if __name__ == '__main__':
         d = maxD
         print("Detection with max area: Left: {} Top: {} Right: {} Bottom: {}".format(
             d.left(), d.top(), d.right(), d.bottom()))
-        imNames.append(f)
         ft,shape = extractFaceFeature(img,predictor,d)
-        features.append(ft)
         win.add_overlay(shape)
-        #dlib.hit_enter_to_continue()
+        dropFlag = False
+        for i in xrange(ft.shape[1]):
+            if math.isnan(ft[0,i]):
+                dropFlag = True
+                print 'drop',f
+                #dlib.hit_enter_to_continue()
+                break
+        if not dropFlag:
+            imNames.append(f)
+            features.append(ft)
+            
     features = np.asarray(features, dtype = 'float')
     features = features.reshape((features.shape[0],features.shape[2]))
     OUTF = open(sys.argv[2],'wb')
