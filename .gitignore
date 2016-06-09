@@ -14,3 +14,4 @@ mnist-data
 .*
 *.out
 cache
+*.pkl
