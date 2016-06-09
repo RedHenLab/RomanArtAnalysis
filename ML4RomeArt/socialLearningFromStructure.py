@@ -83,6 +83,7 @@ if __name__ == '__main__':
         OF.close()
     elif sys.argv[1] == 'analysis':
         assert len(sys.argv[2:]) >= 2
+        numLabel = len(labelList)
         portId,stats, wdCount = pickle.load(open(sys.argv[2],'rb'))
         imName,socialEval = pickle.load(open(sys.argv[3],'rb'))
         imId = []
@@ -110,7 +111,7 @@ if __name__ == '__main__':
         commonEval = np.asarray(commonEval)
         commonEval.reshape((commonEval.shape[0],-1))
         commonData = np.concatenate([commonWC,commonEval], axis = 1)
-        corr = np.corrcoef(commonData,rowvar = 0)[:,-len(labelList):]
+        corr = np.corrcoef(commonData,rowvar = 0)[:,-numLabel:]
         stats += [[l,1] for l in labelList]
         OF = open(RESULT_PATH+'correlationKeywordsSocialEval.csv','w')
         tstr = ''
@@ -122,6 +123,20 @@ if __name__ == '__main__':
             for j in xrange(corr.shape[1]):
                 tstr= tstr+"{:.4f}".format(corr[i,j])+','
             print>>OF,tstr[:-1]
+        OF.close()
+
+        corrPairs = []
+        for i in xrange(corr.shape[0]-numLabel):
+            for j in xrange(corr.shape[1]):
+                if not math.isnan(corr[i,j]):
+                    corrPairs.append((stats[i][0], labelList[j], corr[i,j]))
+        corrPairs.sort(key = lambda x:abs(x[2]))
+        corrPairs.reverse()
+
+        OF = open(RESULT_PATH+'keywordSocialCorrPairsSorted.csv','w')
+        for k,s,c in corrPairs:
+            tstr = k+','+s+','+ "{:.4f}".format(c)
+            print>>OF,tstr
         OF.close()
 
     else:
