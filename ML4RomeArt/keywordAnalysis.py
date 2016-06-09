@@ -77,6 +77,10 @@ if __name__ == '__main__':
         ars.reverse()
         absCorrMax.append(ars)
 
+    OF = open(RESULT_PATH + 'TF.pkl','wb')
+    pickle.dump((portId,stats,sortedWordCount),OF,-1)
+    OF.close()
+
     OF = open(RESULT_PATH+'wordCount.csv','w')
     for s in stats:
         print>>OF, s[0]+','+str(s[1])
