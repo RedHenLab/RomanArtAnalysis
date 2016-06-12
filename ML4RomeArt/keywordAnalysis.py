@@ -40,6 +40,8 @@ def countCoocc(countMat):
 
 RESULT_PATH = 'keywordResults/'
 MAX_NUM = 20
+maxDf = 0.8
+minDf = 0.1
 if __name__ == '__main__':
     totalDF = collectJson(sys.argv[1])
     print 'all the columns we have',totalDF.columns
@@ -49,7 +51,15 @@ if __name__ == '__main__':
     for po,rc in newDf.iterrows():
         portId.append(po)
         portStr.append(' '.join([k for k in rc]))
-    hashVectorizer = HV(input='content', encoding='utf-8', decode_error='strict', strip_accents=None, lowercase=True, preprocessor=None, tokenizer=None, stop_words='english', token_pattern=r'\b\w\w*\-?\w+\b', ngram_range=(1, 1), analyzer='word', max_df=1.0, min_df=2, max_features=None, vocabulary=None, binary=True)
+    if len(sys.argv) <= 2: #not reduce
+        hashVectorizer = HV(input='content', encoding='utf-8', decode_error='strict', strip_accents=None, lowercase=True, preprocessor=None, tokenizer=None, stop_words='english', token_pattern=r'\b\w\w*\-?\w+\b', ngram_range=(1, 1), analyzer='word', max_df=1.0, min_df=2, max_features=None, vocabulary=None, binary=True)
+    else:#reduce: drop the words occur too much or too few
+        maxDf = float(sys.argv[2])
+        if len(sys.argv)>3:
+            minDf = float(sys.argv[3])
+            if minDf > 1.0:
+                minDf = int(minDf)
+        hashVectorizer = HV(input='content', encoding='utf-8', decode_error='strict', strip_accents=None, lowercase=True, preprocessor=None, tokenizer=None, stop_words='english', token_pattern=r'\b\w\w*\-?\w+\b', ngram_range=(1, 1), analyzer='word', max_df=maxDf, min_df=minDf, max_features=None, vocabulary=None, binary=True)
     wdCount = hashVectorizer.fit_transform(portStr)
     print 'word count matrix shape',wdCount.shape
     occs = wdCount.sum(axis = 0)
@@ -77,52 +87,61 @@ if __name__ == '__main__':
         ars.reverse()
         absCorrMax.append(ars)
 
-    OF = open(RESULT_PATH + 'TF.pkl','wb')
+    if len(sys.argv)>2:
+        tfdataFile = 'TF-reduce.pkl'
+        wcdataFile = 'wordCount-reduce.csv'
+    else:
+        tfdataFile = 'TF.pkl'
+        wcdataFile = 'wordCount.csv'
+
+
+    OF = open(RESULT_PATH + tfdataFile,'wb')
     pickle.dump((portId,stats,sortedWordCount),OF,-1)
     OF.close()
 
-    OF = open(RESULT_PATH+'wordCount.csv','w')
+    OF = open(RESULT_PATH+wcdataFile,'w')
     for s in stats:
         print>>OF, s[0]+','+str(s[1])
     OF.close()
 
-    OF = open(RESULT_PATH+'cooccurrence.csv','w')
-    tstr = ''
-    for s in stats:
-        tstr+=','+s[0]
-    print >>OF,tstr
-    for i in xrange(cooccs.shape[0]):
-        tstr = stats[i][0]+','
-        for j in xrange(cooccs.shape[1]):
-            tstr= tstr+str(cooccs[i,j])+','
-        print>>OF,tstr[:-1]
-    OF.close()
+    if len(sys.argv) <= 2: #not recude
+        OF = open(RESULT_PATH+'cooccurrence.csv','w')
+        tstr = ''
+        for s in stats:
+            tstr+=','+s[0]
+        print >>OF,tstr
+        for i in xrange(cooccs.shape[0]):
+            tstr = stats[i][0]+','
+            for j in xrange(cooccs.shape[1]):
+                tstr= tstr+str(cooccs[i,j])+','
+            print>>OF,tstr[:-1]
+        OF.close()
 
-    OF = open(RESULT_PATH+'correlationCoef.csv','w')
-    tstr = ''
-    for s in stats:
-        tstr+=','+s[0]
-    print >>OF,tstr
-    for i in xrange(corr.shape[0]):
-        tstr = str(stats[i][0])+','
-        for j in xrange(corr.shape[1]):
-            tstr= tstr+"{:.4f}".format(corr[i,j])+','
-        print>>OF,tstr[:-1]
-    OF.close()
+        OF = open(RESULT_PATH+'correlationCoef.csv','w')
+        tstr = ''
+        for s in stats:
+            tstr+=','+s[0]
+        print >>OF,tstr
+        for i in xrange(corr.shape[0]):
+            tstr = str(stats[i][0])+','
+            for j in xrange(corr.shape[1]):
+                tstr= tstr+"{:.4f}".format(corr[i,j])+','
+            print>>OF,tstr[:-1]
+        OF.close()
 
-    OF = open(RESULT_PATH+'correlationSort.csv','w')
-    for i in xrange(len(corrMax)):
-        tstr = stats[i][0]+','
-        for idx in corrMax[i][1:]:
-            tstr = tstr+ stats[idx][0]+','+"{:.4f}".format(corr[i,idx])+','
-        print>>OF,tstr[:-1]
-    OF.close()
+        OF = open(RESULT_PATH+'correlationSort.csv','w')
+        for i in xrange(len(corrMax)):
+            tstr = stats[i][0]+','
+            for idx in corrMax[i][1:]:
+                tstr = tstr+ stats[idx][0]+','+"{:.4f}".format(corr[i,idx])+','
+            print>>OF,tstr[:-1]
+        OF.close()
 
-    OF = open(RESULT_PATH+'absoluteCorrelationSort.csv','w')
-    for i in xrange(len(absCorrMax)):
-        tstr = stats[i][0]+','
-        for idx in absCorrMax[i][1:]:
-            tstr = tstr+ stats[idx][0]+','+"{:.4f}".format(corr[i,idx])+','
-        print>>OF,tstr[:-1]
-    OF.close()
+        OF = open(RESULT_PATH+'absoluteCorrelationSort.csv','w')
+        for i in xrange(len(absCorrMax)):
+            tstr = stats[i][0]+','
+            for idx in absCorrMax[i][1:]:
+                tstr = tstr+ stats[idx][0]+','+"{:.4f}".format(corr[i,idx])+','
+            print>>OF,tstr[:-1]
+        OF.close()
 
