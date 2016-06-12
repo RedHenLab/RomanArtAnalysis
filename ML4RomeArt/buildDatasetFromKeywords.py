@@ -36,6 +36,9 @@ key1 = [['male'],['female']]
 key2 = [['male','man'],['female','woman']]
 key3 = [['bearded','long-bearded','short-bearded'],['clean-shaven','shaven']]
 key4 = [['long-bearded', 'long'],['short','short-bearded'],['stubble','stubble-bearded'],['clean-shaven','shaven']]
+
+minSupport = 0.02
+
 def buildWordHash(df):
     portId, portStr = [], []
     for po,rc in df.iterrows():
@@ -86,6 +89,46 @@ def buildFromField(df, imgList, filterd, field, key, endPat):
             dataset = dataset + [(filterd[im],label) for im in thisImg if im in filterd]
     return dataset
 
+def buildFromFieldAuto(df, imgList, filterd, field, endPat):
+    dataset = []
+    classIdx = 0
+    classHash, validClassHash = {},{}
+    classList = []
+    for po,rc in df.iterrows():
+        className = ' '.join(simpleTokenizer(rc[field]))
+        if len(className) < 1:
+            continue
+        if className in classHash:
+            classHash[className]+=1
+        else:
+            classHash[className] = 1
+    if type(minSupport) == type(0.8):
+        minSupportNumber = minSupport*len(df.index)
+    else:
+        minSupportNumber = minSupport
+    for c in classHash:
+        if classHash[c] > minSupportNumber:
+            classList.append((c,classHash[c]))
+            validClassHash[c] = classIdx
+            classIdx+=1
+    print 'all the valid class we have:',classList
+    print 'total number of classes:', len(classList)
+    if len(classList) < 2:
+        print 'number of classes must larger than or equal to 2'
+        return False
+    for po,rc in df.iterrows():
+        className = ' '.join(simpleTokenizer(rc[field]))
+        if className in validClassHash:
+            label = validClassHash[className]
+        else:
+            label = -1
+        if label >= 0:
+            thisImg = [im for im in imgList if im[:im.find(endPat)] == po]
+            dataset = dataset + [(filterd[im],label) for im in thisImg if im in filterd]
+    return dataset, classList
+
+    
+
 def buildFromWords(wdCount, portId, vocabulary, imgList, filterd, key, endPat):
     dataset = []
     for idx,po in enumerate(portId):
@@ -123,10 +166,18 @@ if __name__ == '__main__':
     portId,wdCount,vocabulary = buildWordHash(newDf)
    
     #data = buildFromField(newDf,imgList, filterd, 'Gender',key1, '_')
-    data = buildFromField(newDf,imgList, filterd, 'Beard',key4, '_')
+    #data = buildFromField(newDf,imgList, filterd, 'Beard',key4, '_')
     #data = buildFromWords(wdCount,portId, vocabulary, imgList, filterd, key2,'.jpg')
-    print len(data)
-    OF = open(sys.argv[3],'w')
-    for line in data:
-        print >>OF,line[0],line[1]
-    OF.close
+
+    for f in fieldMask1:
+        ret = buildFromFieldAuto(newDf, imgList, filterd, f, '_')
+        if ret == False:
+            print 'pass',f
+            continue
+        data, keys = ret
+        print len(data)
+        OF = open(sys.argv[3]+'.'+f+'-'+str(len(keys))+'.txt','w')
+        print >>OF,'#',keys
+        for line in data:
+            print >>OF,line[0],line[1]
+        OF.close
