@@ -61,7 +61,6 @@ class frontalizer():
 
     def frontalizeImage(self,img_,facebb,p2d_):
         a,b,c = self.frontalization(img_,facebb,p2d_)
-        print c.shape
         return c
     
     def frontalization(self,img_,facebb,p2d_):
@@ -73,7 +72,7 @@ class frontalizer():
         facebb = [facebb.left(), facebb.top(), facebb.width(), facebb.height()]
         w = facebb[2]
         h = facebb[3]
-        fb_ = np.clip([[facebb[0] - w, facebb[1] - h],[facebb[0] + 2 * w, facebb[1] + 2 * h]], [0,0], [img_.shape[1], img_.shape[0]])  
+        fb_ = np.clip([[facebb[0] - w, facebb[1] - h],[facebb[0] + 2 * w, facebb[1] + 2 * h]], [0,0], [img_.shape[1], img_.shape[0]])
         img = img_[fb_[0][1]:fb_[1][1], fb_[0][0]:fb_[1][0],:]
         p2d = copy.deepcopy(p2d_) 
         p2d[:,0] = (p2d_[:,0] - fb_[0][0]) * float(WD) / float(img.shape[1])
@@ -119,7 +118,7 @@ class frontalizer():
         sumleft = np.sum(synth_front[:,0:mline])
         sumright = np.sum(synth_front[:,mline:])
         sum_diff = sumleft - sumright
-        print sum_diff
+        #print sum_diff
         if np.abs(sum_diff) > ACC_CONST:
             weights = np.zeros(sp_)
             if sum_diff > ACC_CONST:
