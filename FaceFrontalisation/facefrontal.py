@@ -58,6 +58,12 @@ class frontalizer():
             matx = cv2.Rodrigues(rvec)
             ProjM_ = self.A.dot(np.insert(matx[0],3,tvec.T,axis=1))
             return rvec,tvec,ProjM_
+
+    def frontalizeImage(self,img_,facebb,p2d_):
+        a,b,c = self.frontalization(img_,facebb,p2d_)
+        print c.shape
+        return c
+    
     def frontalization(self,img_,facebb,p2d_):
         #we rescale the face region (twice as big as the detected face) before applying frontalisation
         #the rescaled size is WD x HT 
@@ -133,15 +139,20 @@ class frontalizer():
             frontal_sym = (rawfrontal * weights + rawfrontal * weight_take_from_org + np.fliplr(rawfrontal) * weight_take_from_sym) / denominator
         else:
             frontal_sym = rawfrontal
-        return rawfrontal, frontal_sym
+        return rawfrontal, frontal_sym, np.round(frontal_sym).astype(np.uint8)
 
+def getDefaultFrontalizer():
+    myPath = os.path.split(os.path.realpath(__file__))[0]
+    fpath = os.path.join(myPath,'ref3d.pklmodel')
+    return frontalizer(fpath)
 
 if __name__ == "__main__":
-    ##to make sure you have dlib 
-    PATH_face_model = 'face_shape.dat'
+    ##to make sure you have dlib
+    myPath = os.path.split(os.path.realpath(__file__))[0]
+    PATH_face_model  = os.path.join(myPath,'face_shape.dat')
     md_face = dlib.shape_predictor(PATH_face_model)
     face_det = dlib.get_frontal_face_detector()
-    fronter = frontalizer('ref3d.pkl')
+    fronter = getDefaultFrontalizer()
     #________________model initialisation 
     #
 
@@ -153,6 +164,6 @@ if __name__ == "__main__":
         shape = md_face(img,det)
         p2d = np.asarray([(shape.part(n).x, shape.part(n).y,) for n in range(shape.num_parts)], np.float32)
     st = time.time()
-    rawfront, symfront = fronter.frontalization(img,det,p2d)
+    frontIm = fronter.frontalizeImage(img,det,p2d)
     print "eplased time:", time.time() - st 
-    sm.toimage(np.round(symfront).astype(np.uint8)).show()
+    sm.toimage(frontIm).show()
