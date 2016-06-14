@@ -15,6 +15,11 @@ import pandas as pd
 import cv2
 import dlib
 from skimage import io
+from skimage import img_as_ubyte
+parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parentdir)
+
+from FaceFrontalisation.facefrontal import getDefaultFrontalizer
 
 TEMPLATE = np.float32([
     (0.0792396913815, 0.339223741112), (0.0829219487236, 0.456955367943),
@@ -62,6 +67,8 @@ OUTER_EYES_AND_NOSE = [36, 45, 33]
 imgDim = 256
 ENLARGE = 1.25
 
+MODE = 1
+
 if __name__ == '__main__':
     if len(sys.argv) != 3:
         print(
@@ -84,9 +91,17 @@ if __name__ == '__main__':
 
     detector = dlib.get_frontal_face_detector()
     predictor = dlib.shape_predictor(predictor_path)
+    win = dlib.image_window()
+    if MODE == 1:
+        fronter = getDefaultFrontalizer()
     for f in glob.glob(os.path.join(faces_folder_path, "*.jpg")):
         print("Processing file: {}".format(f))
         img = io.imread(f)
+        if len(img.shape) < 3:
+            cimg = np.ndarray((img.shape[0],img.shape[1],3),dtype = 'uint8')
+            for k in xrange(3):
+                cimg[:,:,k] = img[:,:]
+            img = cimg.copy()
         # Ask the detector to find the bounding boxes of each face. The 1 in the
         # second argument indicates that we should upsample the image 1 time. This
         # will make everything bigger and allow us to detect more faces.
@@ -107,12 +122,20 @@ if __name__ == '__main__':
         #print("Part 0: {}, Part 1: {} ...".format(shape.part(0),shape.part(1)))
         landmarks = list(map(lambda p: (p.x, p.y), shape.parts()))
         npLandmarks = np.float32(landmarks)
-        npLandmarkIndices = np.array(landmarkIndices)            
-        H = cv2.getAffineTransform(npLandmarks[npLandmarkIndices],
-                                imgDim * MINMAX_TEMPLATE[npLandmarkIndices]+imgDim*(ENLARGE-1.0)/2)
-        thumbnail = cv2.warpAffine(img, H, (int(imgDim*ENLARGE), int(imgDim*ENLARGE)))
+        if MODE == 0:
+            npLandmarkIndices = np.array(landmarkIndices)            
+            H = cv2.getAffineTransform(npLandmarks[npLandmarkIndices],
+                                       imgDim * MINMAX_TEMPLATE[npLandmarkIndices]+imgDim*(ENLARGE-1.0)/2)
+            thumbnail = cv2.warpAffine(img, H, (int(imgDim*ENLARGE), int(imgDim*ENLARGE)))
+            fnSurf = '_crop.jpg'
+        else:
+            thumbnail = fronter.frontalizeImage(img,d,npLandmarks)
+            cut = thumbnail.shape[0]/8
+            thumbnail = thumbnail[cut:thumbnail.shape[0]-cut,cut:thumbnail.shape[1]-cut,:].copy()
+            fnSurf = '_frontal.jpg'
+        win.set_image(thumbnail)
         imPath, imName = os.path.split(f)
         print >>filterListFile, imName,d.left(),d.top(),d.right(),d.bottom(),landmarks
-        io.imsave(os.path.join(outputDir,imName+'_crop.jpg'),thumbnail)
+        io.imsave(os.path.join(outputDir,imName+fnSurf),thumbnail)
         sys.stdout.flush()
         
