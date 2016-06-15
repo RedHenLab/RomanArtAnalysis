@@ -17,6 +17,13 @@ import cv2
 import dlib
 from skimage import io
 
+parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parentdir)
+
+from FaceFrontalisation.facefrontal import getDefaultFrontalizer
+
+MODE = 1
+
 TEMPLATE = np.float32([
     (0.0792396913815, 0.339223741112), (0.0829219487236, 0.456955367943),
     (0.0967927109165, 0.575648016728), (0.122141515615, 0.691921601066),
@@ -77,14 +84,36 @@ def getEccentricity(p0,p1,p2,p3 = None):
 def edis(a,b):
     return np.sqrt(np.dot(a-b,a-b))
 
-def extractFaceFeature(img, predictor, d):
+def getNormalizedLandmarks(img, predictor, d, fronter = None, win2 = None):
     shape = predictor(img, d)
     landmarks = list(map(lambda p: (p.x, p.y), shape.parts()))
     npLandmarks = np.float32(landmarks)
-    npLandmarkIndices = np.array(landmarkIndices)            
-    H = cv2.getAffineTransform(npLandmarks[npLandmarkIndices],
-                               MINMAX_TEMPLATE[npLandmarkIndices])
-    normLM = cv2.transform(np.asarray([npLandmarks]),H)[0,:,:]
+    if MODE == 0:
+        npLandmarkIndices = np.array(landmarkIndices)            
+        H = cv2.getAffineTransform(npLandmarks[npLandmarkIndices],
+                                MINMAX_TEMPLATE[npLandmarkIndices])
+        normLM = cv2.transform(np.asarray([npLandmarks]),H)[0,:,:]
+        return normLM
+    else:
+        assert fronter is not None
+        thumbnail = fronter.frontalizeImage(img,d,npLandmarks)
+        cut = thumbnail.shape[0]/5
+        thumbnail = thumbnail[cut:thumbnail.shape[0]-cut,cut+10:thumbnail.shape[1]-cut-10,:].copy()
+        newShape = predictor(thumbnail, dlib.rectangle(0,0,thumbnail.shape[0],thumbnail.shape[1]))
+        if win2 is not None:
+            win2.clear_overlay()
+            win2.set_image(thumbnail)
+            win2.add_overlay(newShape)
+            #dlib.hit_enter_to_continue()
+        landmarks = list(map(lambda p: (float(p.x)/thumbnail.shape[0], float(p.y)/thumbnail.shape[1]), newShape.parts()))
+        npLandmarks = np.float32(landmarks)
+        normLM = npLandmarks
+    return normLM,shape
+        
+        
+
+def extractFaceFeature(img, predictor, d, fronter = None, win2 = None):
+    normLM,shape = getNormalizedLandmarks(img, predictor, d, fronter, win2)
     #length group
     lew = edis(normLM[36],normLM[39]) #left eye width
     rew = edis(normLM[42],normLM[45]) #right eye width
@@ -139,8 +168,11 @@ def extractFaceFeature(img, predictor, d):
     e6 = getEccentricity(normLM[42],normLM[45],normLM[46],normLM[47])#lower rigth eye
     e7 = getEccentricity(normLM[17],normLM[21],normLM[19])#left eye brown
     e8 = getEccentricity(normLM[22],normLM[26],normLM[24])#right eye brown
-    features = np.asarray([lew,rew,leh,reh,mew,meh,noh,now,fw1,fw2,fw3,fw4,flen,upliph,btliph,mouw,\
+    '''features = np.asarray([lew,rew,leh,reh,mew,meh,noh,now,fw1,fw2,fw3,fw4,flen,upliph,btliph,mouw,\
                 l1,l2,l2,fr1,fr3,fr4,fr5,fr6,fr7,eyer,mour,leba,reba,nora,nota,china1,lfa,rfa,\
+                           moucora, e1,e2,e3,e4,e5,e6,e7,e8],dtype = 'float')'''
+    features = np.asarray([lew,rew,leh,reh,mew,meh,noh,now,fw1,fw2,fw3,fw4,flen,upliph,btliph,mouw,\
+                           leba,reba,nora,nota,china1,lfa,rfa,\
                            moucora, e1,e2,e3,e4,e5,e6,e7,e8],dtype = 'float')
     features = features.reshape((1,features.shape[0]))
     points  = normLM.reshape((1,-1))
@@ -155,11 +187,18 @@ if __name__ == '__main__':
     imNames = []
     features = []
     win = dlib.image_window()
+    win2 = dlib.image_window()
     flist = glob.glob(os.path.join(faces_folder_path, "*.jpg"))
     flist.sort()
+    fronter = getDefaultFrontalizer()
     for n,f in enumerate(flist):
         print("Processing file: {}".format(f))
         img = io.imread(f)
+        if len(img.shape) < 3:
+            cimg = np.ndarray((img.shape[0],img.shape[1],3),dtype = 'uint8')
+            for k in xrange(3):
+                cimg[:,:,k] = img[:,:]
+            img = cimg.copy()
         # Ask the detector to find the bounding boxes of each face. The 1 in the
         # second argument indicates that we should upsample the image 1 time. This
         # will make everything bigger and allow us to detect more faces.
@@ -177,7 +216,7 @@ if __name__ == '__main__':
         d = maxD
         print("Detection with max area: Left: {} Top: {} Right: {} Bottom: {}".format(
             d.left(), d.top(), d.right(), d.bottom()))
-        ft,shape = extractFaceFeature(img,predictor,d)
+        ft,shape = extractFaceFeature(img,predictor,d, fronter, win2)
         win.add_overlay(shape)
         dropFlag = False
         for i in xrange(ft.shape[1]):
