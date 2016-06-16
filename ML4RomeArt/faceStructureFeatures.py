@@ -22,7 +22,7 @@ sys.path.append(parentdir)
 
 from FaceFrontalisation.facefrontal import getDefaultFrontalizer
 
-MODE = 1
+MODE = 0
 
 TEMPLATE = np.float32([
     (0.0792396913815, 0.339223741112), (0.0829219487236, 0.456955367943),
@@ -80,6 +80,8 @@ def getEccentricity(p0,p1,p2,p3 = None):
     if p3 is None:
         p3 = p2
     b = abs((p0[1]+p1[1])/2.0-(p2[1]+p3[1])/2.0)
+    if b > a:
+        b = a
     return np.sqrt(a**2-b**2)/a
 def edis(a,b):
     return np.sqrt(np.dot(a-b,a-b))
@@ -93,7 +95,7 @@ def getNormalizedLandmarks(img, predictor, d, fronter = None, win2 = None):
         H = cv2.getAffineTransform(npLandmarks[npLandmarkIndices],
                                 MINMAX_TEMPLATE[npLandmarkIndices])
         normLM = cv2.transform(np.asarray([npLandmarks]),H)[0,:,:]
-        return normLM
+        return normLM,shape
     else:
         assert fronter is not None
         thumbnail = fronter.frontalizeImage(img,d,npLandmarks)
@@ -221,9 +223,10 @@ if __name__ == '__main__':
         dropFlag = False
         for i in xrange(ft.shape[1]):
             if math.isnan(ft[0,i]):
+                print i
                 dropFlag = True
                 print 'drop',f
-                #dlib.hit_enter_to_continue()
+                dlib.hit_enter_to_continue()
                 break
         if not dropFlag:
             imNames.append(f)
