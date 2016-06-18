@@ -22,7 +22,7 @@ sys.path.append(parentdir)
 
 from FaceFrontalisation.facefrontal import getDefaultFrontalizer
 
-MODE = 0
+MODE = 1
 
 TEMPLATE = np.float32([
     (0.0792396913815, 0.339223741112), (0.0829219487236, 0.456955367943),
@@ -86,6 +86,12 @@ def getEccentricity(p0,p1,p2,p3 = None):
 def edis(a,b):
     return np.sqrt(np.dot(a-b,a-b))
 
+def imgEnhance(img):
+    blur = cv2.GaussianBlur(img,(0,0),20)
+    img = cv2.addWeighted(img,1.1,blur,-0.1,0)
+    #return blur
+    return img
+
 def getNormalizedLandmarks(img, predictor, d, fronter = None, win2 = None):
     shape = predictor(img, d)
     landmarks = list(map(lambda p: (p.x, p.y), shape.parts()))
@@ -99,8 +105,9 @@ def getNormalizedLandmarks(img, predictor, d, fronter = None, win2 = None):
     else:
         assert fronter is not None
         thumbnail = fronter.frontalizeImage(img,d,npLandmarks)
+        #thumbnail = imgEnhance(thumbnail)
         cut = thumbnail.shape[0]/5
-        thumbnail = thumbnail[cut:thumbnail.shape[0]-cut,cut+10:thumbnail.shape[1]-cut-10,:].copy()
+        thumbnail = thumbnail[cut+5:thumbnail.shape[0]-cut-5,cut+10:thumbnail.shape[1]-cut-10,:].copy()
         newShape = predictor(thumbnail, dlib.rectangle(0,0,thumbnail.shape[0],thumbnail.shape[1]))
         if win2 is not None:
             win2.clear_overlay()
@@ -115,7 +122,10 @@ def getNormalizedLandmarks(img, predictor, d, fronter = None, win2 = None):
         
 
 def extractFaceFeature(img, predictor, d, fronter = None, win2 = None):
-    normLM,shape = getNormalizedLandmarks(img, predictor, d, fronter, win2)
+    ret = getNormalizedLandmarks(img, predictor, d, fronter, win2)
+    if ret == False:
+        return False
+    normLM,shape = ret
     #length group
     lew = edis(normLM[36],normLM[39]) #left eye width
     rew = edis(normLM[42],normLM[45]) #right eye width
@@ -218,9 +228,13 @@ if __name__ == '__main__':
         d = maxD
         print("Detection with max area: Left: {} Top: {} Right: {} Bottom: {}".format(
             d.left(), d.top(), d.right(), d.bottom()))
-        ft,shape = extractFaceFeature(img,predictor,d, fronter, win2)
+        ret = extractFaceFeature(img,predictor,d, fronter, win2)
+        if ret == False:
+            continue
+        ft,shape = ret
         win.add_overlay(shape)
         dropFlag = False
+        #dlib.hit_enter_to_continue()
         for i in xrange(ft.shape[1]):
             if math.isnan(ft[0,i]):
                 print i
