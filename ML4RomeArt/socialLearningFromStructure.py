@@ -17,18 +17,24 @@ import math
 from sklearn.grid_search import GridSearchCV
 import shutil
 import matplotlib.pyplot as plt
+import xgboost
+from scipy import stats
+from outliers import smirnov_grubbs as grubbs
 
 labelList = ['Old', 'Masculine', 'Baby-faced', 'Competent', 'Attractive', 'Energetic', \
              'Well-groomed', 'Intelligent', 'Honest', 'Generous', \
              'Trustworthy', 'Confident', 'Rich', 'Dominant']
 
 MODEL_PATH = '/home/mfs6174/GSOC2016/GSoC2016-RedHen/models/'
+#MODEL_PREFIX = 'social_landmarks_XGB_MAPE_FRNR'
 MODEL_PREFIX = 'social_landmarks_SVR_PWCA_FRNR'
 #MODEL_PREFIX = 'social_landmarks_SVR_'
 RESULT_PATH = 'keywordResults/'
 ARG_LEN = 30
 
-MODE = 1
+IMG_MODE = 1
+REGRESSOR_MODE = 'XGB'
+SCALE_MODE = 0
 
 def median_absolute_percentage_error(y_true, y_pred): 
     #y_true, y_pred = check_arrays(y_true, y_pred)
@@ -88,6 +94,13 @@ def quantized_classification_accuracy(y_true, y_pred, Q = 2):
             ct += 1
     return float(ct)/y_true.shape[0]
 
+def mape_xg(yhat, y):
+    yt = y.get_label()
+    return "median_absolute_percentage_error", median_absolute_percentage_error(yt, yhat)
+
+def pwca_xg(yhat, y):
+    yt = y.get_label()
+    return "pair_wise_classification_accuracy", -pair_wise_classification_accuracy(yt, yhat)
 
 def customScorerMAPE(estimator, X,y):
     return -median_absolute_percentage_error(y,estimator.predict(X))
@@ -112,7 +125,7 @@ def filterNaN(imName,dataX):
 if __name__ == '__main__':
     assert len(sys.argv)>1
     if sys.argv[1] == 'train':
-        assert len(sys.argv[2:]) >= 2
+        assert len(sys.argv[2:]) >= 2,'usage: annoatation mat, pickled face feature'
         dataY = sio.loadmat(sys.argv[2])['trait_annotation']
         imName,dataX = pickle.load(open(sys.argv[3],'rb'))
         print np.max(dataX),np.min(dataX)
@@ -122,22 +135,33 @@ if __name__ == '__main__':
         baseReg = SVR(kernel='linear', gamma=0.1, coef0=0.0, C=1.0, epsilon=0.2, verbose=False)
         numLabel = dataY.shape[1]
         wmscore = 0.0
-        paramGridLinear = {'C':(0.01,0.05,0.1,0.3,0.5,0.7,1.0,1.25,1.5,2.0,3.0,5.0,8.0,10.0,20.0,40.0,60.0,100.0,500.0,1000.0),'kernel':('linear',),'epsilon':(0.01,0.02,0.05,0.075,0.1,0.2,0.3,0.4,0.5,0.8,1.0)}
+        paramGridLinear = {'C':(0.01,0.1,0.3,0.5,0.7,1.0,1.25,1.5,2.0,3.0,5.0,8.0,10.0,20.0,40.0,60.0,100.0,500.0,1000.0),'kernel':('linear',),'epsilon':(0.001,0.005,0.01,0.02,0.05,0.075,0.1,0.2,0.3,0.4,0.5,0.8,1.0)}
         paramGridLinearC = {'C':(0.0001,0.001,0.01,0.05,0.1,0.5,1.0,5.0,10.0,50.0,100.0,500.0,1000.0),'kernel':('linear',),'epsilon':(0.01,0.05,0.1,0.2,0.3)}
         paramGridRbf = {'gamma':(0.0001,0.001,0.005,0.01,0.05,0.1,0.5,1.0),'C':(0.01,0.05,0.1,0.3,0.5,0.7,1.0,1.25,1.5,2.0,3.0,5.0,8.0,10.0,20.0,40.0,60.0,100.0,500.0,1000.0),'kernel':('rbf',),'epsilon':(0.01,0.02,0.05,0.075,0.1,0.2,0.3,0.4,0.5,0.8,1.0)}
-        paramGridRbfC = {'gamma':(0.0001,0.001,0.005,0.01,0.05,0.1,0.5,1.0,5.0,10.0,50.0,100.0),'C':(0.01,0.05,0.1,0.3,0.5,0.7,1.0,1.25,1.5,2.0,3.0,5.0,8.0,10.0,20.0,40.0,60.0,100.0,500.0,1000.0),'kernel':('rbf',),'epsilon':(0.01,0.05,0.1,0.2,0.3)}
+        paramGridRbfC = {'gamma':(0.0001,0.001,0.005,0.01,0.05,0.1,0.5,1.0,5.0,10.0),'C':(0.01,0.1,0.3,0.5,0.7,1.0,1.25,1.5,2.0,3.0,5.0,8.0,10.0,20.0,40.0,60.0,100.0,500.0,1000.0),'kernel':('rbf',),'epsilon':(0.001,0.005,0.01,0.025,0.05,0.075,0.1,0.2,0.3)}
         
         #paramGridAll = [paramGridLinear,paramGridRbf]
         paramGridAll = [paramGridLinearC,paramGridRbfC]
         for l in xrange(numLabel):
+            print 'label',l,labelList[l]
             print np.min(dataY[:,l]),np.max(dataY[:,l]),np.max(dataY[:,l])-np.min(dataY[:,l]),np.std(dataY[:,l])
-            gscv = GridSearchCV(baseReg,paramGridAll, scoring = customScorerPWCA,cv = 5, n_jobs=-1, refit = True,verbose = 1)
-            gscv.fit(dataX, dataY[:,l])
-            #score = cross.cross_val_score(baseReg, dataX, dataY[:,l], scoring = 'mean_squared_error',cv = 10, n_jobs=8)
-            score = gscv.best_score_
-            print gscv.best_params_
-            print 'score for social attr',l,labelList[l],-np.mean(score),'+-',np.std(score)
-            wmscore += -np.mean(score)
+            if REGRESSOR_MODE == 'XGB':
+                trainX, valX, trainY, valY = cross.train_test_split(dataX, dataY[:,l], test_size=0.2, random_state=6174)
+                gscv = xgboost.XGBRegressor(max_depth=2, learning_rate=0.001, n_estimators=2500, silent=True,
+                                           objective='reg:linear', nthread=-1,subsample=0.6, colsample_bytree=0.6,seed=2333)
+                eval_set=[(trainX, trainY), (valX, valY)]
+                gscv.fit(trainX, trainY,eval_set = eval_set, eval_metric=mape_xg, early_stopping_rounds = 100,verbose=False)
+                evals_result = gscv.evals_result()
+                print np.min([float(x) for x in evals_result['validation_1']['error']])
+            else:
+                gscv = GridSearchCV(baseReg,paramGridAll, scoring = customScorerPWCA,cv = 5, n_jobs=-1, refit = True,verbose = 1)
+                gscv.fit(dataX, dataY[:,l])
+                #score = cross.cross_val_score(baseReg, dataX, dataY[:,l], scoring = 'mean_squared_error',cv = 10, n_jobs=8)
+                score = gscv.best_score_
+                print gscv.best_params_
+                print 'score for social attr',l,labelList[l],-np.mean(score),'+-',np.std(score)
+                wmscore += -np.mean(score)
+                
             savePath = os.path.join(MODEL_PATH,MODEL_PREFIX+str(l)+'_'+labelList[l]+'.pkl')
             OF = open(savePath,'wb')
             pickle.dump(gscv,OF,-1)
@@ -147,7 +171,7 @@ if __name__ == '__main__':
         print wmscore/numLabel
         
     elif sys.argv[1] == 'validation':
-        assert len(sys.argv[2:]) >= 3
+        assert len(sys.argv[2:]) >= 3,'usage: annoatation mat, pickled face feature, path to output the most and least face images'
         dataY = sio.loadmat(sys.argv[2])['trait_annotation']
         imName,dataX = pickle.load(open(sys.argv[3],'rb'))
         outputPath = sys.argv[4]
@@ -161,6 +185,8 @@ if __name__ == '__main__':
             argPredict = np.argsort(pred)
             argTrue = np.argsort(dataY[:,l])
             print 'attribute',labelList[l]
+            print 'mean,median,std for annotation',np.mean(dataY[:,l]),np.median(dataY[:,l]),np.std(dataY[:,l])
+            print 'mean,median,std for predicted',np.mean(pred),np.median(pred),np.std(pred)
             print 'explained_variance_score',met.explained_variance_score(dataY[:,l],pred)
             print 'r2_score',met.r2_score(dataY[:,l],pred)
             print 'mean_squared_error',met.mean_squared_error(dataY[:,l],pred)
@@ -198,10 +224,19 @@ if __name__ == '__main__':
             
             
     elif sys.argv[1] == 'transfer':
-        assert len(sys.argv[2:]) >= 2
+        if SCALE_MODE == 0:
+            assert len(sys.argv[2:]) >= 2, 'usage: pickled statue face feature, path to write the social evaluation result'
+        else:
+            assert len(sys.argv[2:]) >= 3, 'usage: pickled statue face feature, path to write the social evaluation result, pickled photo face feature'
         imName,dataX = pickle.load(open(sys.argv[2],'rb'))
         imName,dataX = filterNaN(imName,dataX)
-        dataX = prep.minmax_scale(dataX)
+        if SCALE_MODE == 1:
+            imNameP,dataXP = pickle.load(open(sys.argv[4],'rb'))
+            scaler = prep.MinMaxScaler()
+            scaler.fit(dataXP)
+            dataX = scaler.transform(dataX)
+        else:
+            dataX = prep.minmax_scale(dataX)
         xlen,numLabel = dataX.shape[0],len(labelList)
         socialEval = np.ndarray((xlen,numLabel),dtype = 'float')
         for l in xrange(numLabel):
@@ -214,7 +249,7 @@ if __name__ == '__main__':
         OF.close()
         
     elif sys.argv[1] == 'analysis':
-        assert len(sys.argv[2:]) >= 2
+        assert len(sys.argv[2:]) >= 2,'usage: pickled keyword analysis result, pickled social evalution result'
         numLabel = len(labelList)
         portId,stats, wdCount = pickle.load(open(sys.argv[2],'rb'))
         imName,socialEval = pickle.load(open(sys.argv[3],'rb'))
@@ -277,7 +312,7 @@ if __name__ == '__main__':
         facePath = sys.argv[4]
         def copyFaceImg(idx,surf,lab, asort):
             fname = os.path.split(imName[asort[idx]])[1]
-            if MODE == 1:
+            if IMG_MODE == 1:
                 opath = os.path.join(facePath,fname+'_frontal.jpg')
             else:
                 opath = os.path.join(facePath,fname+'_crop.jpg')
@@ -300,6 +335,7 @@ if __name__ == '__main__':
         assert len(sys.argv[2:]) >= 3,'usage: pickled social evaluation results for statues, pickled feature for photos, photo annotation'
         imName,socialEval = pickle.load(open(sys.argv[2],'rb'))
         imName,dataX = pickle.load(open(sys.argv[3],'rb'))
+        dataX = prep.minmax_scale(dataX)
         dataY = sio.loadmat(sys.argv[4])['trait_annotation']
         fig = plt.figure(1, figsize=(9, 6))
         numLabel = len(labelList)
@@ -312,6 +348,11 @@ if __name__ == '__main__':
                 print name
                 tmean,tstd = np.mean(arr),np.std(arr)
                 print 'mean',tmean,'median',np.median(arr),'std',tstd
+            def normalCheck(arr, name):
+                print name
+                p1 = stats.shapiro(arr)[1]
+                p2 = stats.normaltest(arr)[1]
+                print 'p-value from W-test and normal-test',p1,p2
             def ZCheck(a,b):
                 e1,e2 = np.mean(a),np.mean(b)
                 s1,s2 = np.std(a),np.std(b)
@@ -324,7 +365,17 @@ if __name__ == '__main__':
             printStat(anno,'annotation')
             printStat(pred,'predicted')
             trans = socialEval[:,l]
+            #print trans.shape
+            #trans = grubbs.test(trans, 0.1)
+            #print trans.shape
             printStat(trans,'transfered')
+
+            print "**********"
+            print "normal Test for",labelList[l]
+            normalCheck(anno,'annotation')
+            normalCheck(pred,'predicted')
+            normalCheck(trans,'transfered')
+
             Z = ZCheck(pred,trans)
             print "-----------"
             print "Z-Test for",labelList[l]
@@ -338,11 +389,11 @@ if __name__ == '__main__':
             print 'creating boxplot for',labelList[l]
             data_to_plot = [anno, pred, trans]
             # Create an axes instance
-            ax = fig.add_subplot(2,7,l)
+            ax = fig.add_subplot(2,7,l+1)
             ax.set_title(labelList[l])
             ## add patch_artist=True option to ax.boxplot() 
             ## to get fill color
-            bp = ax.boxplot(data_to_plot, patch_artist=True)
+            bp = ax.boxplot(data_to_plot, patch_artist=True, showmeans = True)
 
             ## change outline color, fill color and linewidth of the boxes
             for box in bp['boxes']:
