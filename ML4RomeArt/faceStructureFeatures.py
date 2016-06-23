@@ -17,12 +17,15 @@ import cv2
 import dlib
 from skimage import io
 
+from dataLoder import us10kLoader
+
 parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parentdir)
 
 from FaceFrontalisation.facefrontal import getDefaultFrontalizer
 
 MODE = 1
+LOAD_MODE = 0
 
 TEMPLATE = np.float32([
     (0.0792396913815, 0.339223741112), (0.0829219487236, 0.456955367943),
@@ -180,19 +183,27 @@ def extractFaceFeature(img, predictor, d, fronter = None, win2 = None):
     e6 = getEccentricity(normLM[42],normLM[45],normLM[46],normLM[47])#lower rigth eye
     e7 = getEccentricity(normLM[17],normLM[21],normLM[19])#left eye brown
     e8 = getEccentricity(normLM[22],normLM[26],normLM[24])#right eye brown
+
+    distances = []
+    for i in xrange(68):
+        for j in xrange(i+1,68):
+            distances.append(edis(normLM[i],normLM[j]))
     '''features = np.asarray([lew,rew,leh,reh,mew,meh,noh,now,fw1,fw2,fw3,fw4,flen,upliph,btliph,mouw,\
                 l1,l2,l2,fr1,fr3,fr4,fr5,fr6,fr7,eyer,mour,leba,reba,nora,nota,china1,lfa,rfa,\
                            moucora, e1,e2,e3,e4,e5,e6,e7,e8],dtype = 'float')'''
-    features = np.asarray([lew,rew,leh,reh,mew,meh,noh,now,fw1,fw2,fw3,fw4,flen,upliph,btliph,mouw,\
+    '''features = np.asarray([lew,rew,leh,reh,mew,meh,noh,now,fw1,fw2,fw3,fw4,flen,upliph,btliph,mouw,\
                            leba,reba,nora,nota,china1,lfa,rfa,\
-                           moucora, e1,e2,e3,e4,e5,e6,e7,e8],dtype = 'float')
+                           moucora, e1,e2,e3,e4,e5,e6,e7,e8],dtype = 'float')'''
+    features = np.asarray([l1,l2,l3,lew,rew,leh,reh,mew,meh,noh,now,fw1,fw2,fw3,fw4,flen,upliph,btliph,mouw,\
+                           leba,reba,nora,nota,china1,lfa,rfa,\
+                           moucora, e1,e2,e3,e4,e5,e6,e7,e8]+distances,dtype = 'float')
     features = features.reshape((1,features.shape[0]))
     points  = normLM.reshape((1,-1))
     fullFeatures = np.concatenate((features, points), axis = 1)
     return fullFeatures,shape
     
 if __name__ == '__main__':
-
+    assert len(sys.argv) > 1
     faces_folder_path = sys.argv[1]
     detector = dlib.get_frontal_face_detector()
     predictor = dlib.shape_predictor(predictor_path)
@@ -200,10 +211,18 @@ if __name__ == '__main__':
     features = []
     win = dlib.image_window()
     win2 = dlib.image_window()
-    flist = glob.glob(os.path.join(faces_folder_path, "*.jpg"))
-    flist.sort()
+    if LOAD_MODE == 0:
+        flist = glob.glob(os.path.join(faces_folder_path, "*.jpg"))
+        flist.sort()
+    elif LOAD_MODE == 1:
+        assert len(sys.argv) > 3
+        labelList,flist,dataY = us10kLoader(sys.argv[3],faces_folder_path)
+    else:
+        assert False,'unsupported load mode'
     fronter = getDefaultFrontalizer()
     for n,f in enumerate(flist):
+        if not os.path.isfile(f):
+            continue
         print("Processing file: {}".format(f))
         img = io.imread(f)
         if len(img.shape) < 3:
@@ -251,4 +270,4 @@ if __name__ == '__main__':
     OUTF = open(sys.argv[2],'wb')
     pickle.dump((imNames,features),OUTF,-1)
     OUTF.close()
-        
+    print 'success with',len(imNames)
