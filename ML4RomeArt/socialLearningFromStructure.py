@@ -9,7 +9,7 @@ from sklearn import preprocessing as prep
 from sklearn import cross_validation as cross
 from sklearn import metrics as met
 from sklearn.pipeline import Pipeline
-from sklearn.svm import SVR
+from sklearn.svm import SVR,LinearSVR,NuSVR
 import glob
 import pandas as pd
 import scipy.io as sio
@@ -20,21 +20,30 @@ import matplotlib.pyplot as plt
 import xgboost
 from scipy import stats
 from outliers import smirnov_grubbs as grubbs
+from dataLoder import us10kLoader
 
 labelList = ['Old', 'Masculine', 'Baby-faced', 'Competent', 'Attractive', 'Energetic', \
              'Well-groomed', 'Intelligent', 'Honest', 'Generous', \
              'Trustworthy', 'Confident', 'Rich', 'Dominant']
 
-MODEL_PATH = '/home/mfs6174/GSOC2016/GSoC2016-RedHen/models/'
-#MODEL_PREFIX = 'social_landmarks_XGB_MAPE_FRNR'
-MODEL_PREFIX = 'social_landmarks_SVR_PWCA_FRNR'
+MODEL_PATH = '/home/mfs6174/GSOC2016/GSoC2016-RedHen/models/US10K'
+FIG_PATH = '/home/mfs6174/GSOC2016/GSoC2016-RedHen/Code/ML4RomeArt/Figures'
+#MODEL_PREFIX = 'social_landmarks_XGB_MAPE_FRFULL'
+#MODEL_PREFIX = 'social_landmarks_SVR_PWCA_FRNR'
 #MODEL_PREFIX = 'social_landmarks_SVR_'
+MODEL_PREFIX = 'social_landmarks_SVR_PWCA_FRFULL'
+MODEL_PREFIX = 'social_landmarks_NUSVR_PWCA_FRFULL'
+
 RESULT_PATH = 'keywordResults/'
 ARG_LEN = 30
 
 IMG_MODE = 1
-REGRESSOR_MODE = 'XGB'
-SCALE_MODE = 0
+REGRESSOR_MODE = 'SVR'
+SCALE_MODE = 1
+TRAIN_DATA_MODE = 1
+DATASET_PREF = 'us10K_'
+PLOT_D1 = 5
+PLOT_D2 = 10
 
 def median_absolute_percentage_error(y_true, y_pred): 
     #y_true, y_pred = check_arrays(y_true, y_pred)
@@ -68,7 +77,7 @@ def pair_wise_classification_accuracy(y_true, y_pred):
     ct = 0
     for i in xrange(y_true.shape[0]):
         for j in xrange(i+1,y_true.shape[0]):
-            if (y_pred[i]-y_pred[j])*(y_true[i]-y_true[j]) >= 0:
+            if (y_pred[i]-y_pred[j])*(y_true[i]-y_true[j]) > 0 or ( (y_true[i]-y_true[j]) == 0 and (y_pred[i]-y_pred[j]) ==0 ):
                 ct+=1
     return float(ct)/((y_true.shape[0]-1)*y_true.shape[0]/2)
 
@@ -100,14 +109,15 @@ def mape_xg(yhat, y):
 
 def pwca_xg(yhat, y):
     yt = y.get_label()
-    return "pair_wise_classification_accuracy", -pair_wise_classification_accuracy(yt, yhat)
+    return "pair_wise_classification_error", 1-pair_wise_classification_accuracy(yt, yhat)
 
 def customScorerMAPE(estimator, X,y):
     return -median_absolute_percentage_error(y,estimator.predict(X))
 
 def customScorerPWCA(estimator, X,y):
+    return pair_wise_classification_accuracy(y,estimator.predict(X))
+def customScorerQCA2(estimator, X,y):
     return quantized_classification_accuracy(y,estimator.predict(X))
-
 customScorer = customScorerMAPE
 def filterNaN(imName,dataX):
     flags = [True for _ in xrange(dataX.shape[0])]
@@ -122,45 +132,95 @@ def filterNaN(imName,dataX):
     dataX = dataX.reshape((dataX.shape[0],-1))
     return imName,dataX
 
+def prepareData(dataX, dataY, l,imNameSet):
+    assert l >=0 and l < dataY.shape[1]
+    if TRAIN_DATA_MODE == 0:
+        dataYT = dataY[:,l]
+        dataXT = dataX
+    else:
+        irow = 0
+        dataXT,dataYT = [], []
+        for i in xrange(dataX.shape[0]):
+            if flist[i] in imNameSet:
+                if not np.any(np.isnan(dataY[i,l])):
+                    dataXT.append(dataX[irow,:])
+                    dataYT.append(dataY[i,l])
+                irow+=1
+        dataXT = np.asarray(dataXT)
+        dataYT = np.asarray(dataYT)
+    return dataXT,dataYT
+
+def fixAnno(anno):
+    ave = np.nanmean(anno)
+    assert not np.isinf(ave)
+    for i in xrange(anno.shape[0]):
+        if np.isnan(anno[i]):
+            anno[i] = ave
+    return anno
+
+
 if __name__ == '__main__':
     assert len(sys.argv)>1
     if sys.argv[1] == 'train':
         assert len(sys.argv[2:]) >= 2,'usage: annoatation mat, pickled face feature'
-        dataY = sio.loadmat(sys.argv[2])['trait_annotation']
+        if TRAIN_DATA_MODE == 0:
+            dataY = sio.loadmat(sys.argv[2])['trait_annotation']
+        elif TRAIN_DATA_MODE == 1:
+            labelList,flist,dataY = us10kLoader(sys.argv[2])
+        else:
+            assert False, 'unsupported TRAIN_DATA_MODE'
         imName,dataX = pickle.load(open(sys.argv[3],'rb'))
+        imName,dataX = filterNaN(imName,dataX)
+        imNameSet = set([os.path.split(imn)[1] for imn in imName])
         print np.max(dataX),np.min(dataX)
-        assert dataX.shape[0] == dataY.shape[0]
+        if TRAIN_DATA_MODE == 0:
+            assert dataX.shape[0] == dataY.shape[0]
         dataX = prep.minmax_scale(dataX)
-        print np.max(dataX),np.min(dataX)
-        baseReg = SVR(kernel='linear', gamma=0.1, coef0=0.0, C=1.0, epsilon=0.2, verbose=False)
+        #baseReg = SVR(kernel='linear', gamma=0.1, coef0=0.0, C=1.0, epsilon=0.2, verbose=False, cache = 1000)
+        #baseReg = LinearSVR(dual=True)
+        baseReg = NuSVR(nu=0.5, C=1.0, kernel='rbf', cache_size=1000)
         numLabel = dataY.shape[1]
         wmscore = 0.0
         paramGridLinear = {'C':(0.01,0.1,0.3,0.5,0.7,1.0,1.25,1.5,2.0,3.0,5.0,8.0,10.0,20.0,40.0,60.0,100.0,500.0,1000.0),'kernel':('linear',),'epsilon':(0.001,0.005,0.01,0.02,0.05,0.075,0.1,0.2,0.3,0.4,0.5,0.8,1.0)}
-        paramGridLinearC = {'C':(0.0001,0.001,0.01,0.05,0.1,0.5,1.0,5.0,10.0,50.0,100.0,500.0,1000.0),'kernel':('linear',),'epsilon':(0.01,0.05,0.1,0.2,0.3)}
+        paramGridLinearC = {'C':(0.0001,0.001,0.01,0.05,0.1,0.5,1.0,5.0,10.0,50.0,100.0,500.0,1000.0),'kernel':('linear',),'epsilon':(0.001,0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6)}
+        paramGridLinearCC = {'C':(0.0001,0.001,0.01,0.1,1.0,10.0,100.0,1000.0),'kernel':('linear',),'epsilon':(0.001,0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6)}
+
         paramGridRbf = {'gamma':(0.0001,0.001,0.005,0.01,0.05,0.1,0.5,1.0),'C':(0.01,0.05,0.1,0.3,0.5,0.7,1.0,1.25,1.5,2.0,3.0,5.0,8.0,10.0,20.0,40.0,60.0,100.0,500.0,1000.0),'kernel':('rbf',),'epsilon':(0.01,0.02,0.05,0.075,0.1,0.2,0.3,0.4,0.5,0.8,1.0)}
-        paramGridRbfC = {'gamma':(0.0001,0.001,0.005,0.01,0.05,0.1,0.5,1.0,5.0,10.0),'C':(0.01,0.1,0.3,0.5,0.7,1.0,1.25,1.5,2.0,3.0,5.0,8.0,10.0,20.0,40.0,60.0,100.0,500.0,1000.0),'kernel':('rbf',),'epsilon':(0.001,0.005,0.01,0.025,0.05,0.075,0.1,0.2,0.3)}
-        
+        paramGridRbfC = {'gamma':(0.0001,0.0005,0.001,0.005,0.01,0.05,0.1,0.5,1.0,5.0,10.0,50.0),'C':(0.0001,0.001,0.01,0.05,0.1,0.5,1.0,5.0,10.0,50.0,100.0,500.0,1000.0),'kernel':('rbf',),'epsilon':(0.001,0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6)}
+        paramGridRbfNuCC = {'gamma':(0.0001,0.0005,0.001,0.01,0.1,1.0),'C':(0.01,0.1,0.5,1.0,5.0,10.0,50.0,100.0,500.0),'kernel':('rbf',),'nu':(0.01,0.1,0.3,0.5,0.7,0.9,0.99)}
+        paramGridLibLinear = {'C':(0.0001,0.001,0.01,0.05,0.1,0.5,1.0,5.0,10.0,50.0,100.0,500.0,1000.0),'epsilon':(0.001,0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6)}
         #paramGridAll = [paramGridLinear,paramGridRbf]
-        paramGridAll = [paramGridLinearC,paramGridRbfC]
+        #paramGridAll = [paramGridLinearC,paramGridRbfC]
+        #paramGridAll = [paramGridLibLinear]
+        paramGridAll = [paramGridRbfNuCC]
         for l in xrange(numLabel):
             print 'label',l,labelList[l]
-            print np.min(dataY[:,l]),np.max(dataY[:,l]),np.max(dataY[:,l])-np.min(dataY[:,l]),np.std(dataY[:,l])
+            dataXT,dataYT = prepareData(dataX,dataY,l,imNameSet)
+            print 'number of samples',dataXT.shape[0]
+            print np.min(dataYT),np.max(dataYT),np.max(dataYT)-np.min(dataYT),np.std(dataYT)
             if REGRESSOR_MODE == 'XGB':
-                trainX, valX, trainY, valY = cross.train_test_split(dataX, dataY[:,l], test_size=0.2, random_state=6174)
-                gscv = xgboost.XGBRegressor(max_depth=2, learning_rate=0.001, n_estimators=2500, silent=True,
+                trainX, valX, trainY, valY = cross.train_test_split(dataXT, dataYT, test_size=0.2, random_state=6174)
+                gscv = xgboost.XGBRegressor(max_depth=3, learning_rate=0.005, n_estimators=3000, silent=True,
                                            objective='reg:linear', nthread=-1,subsample=0.6, colsample_bytree=0.6,seed=2333)
                 eval_set=[(trainX, trainY), (valX, valY)]
-                gscv.fit(trainX, trainY,eval_set = eval_set, eval_metric=mape_xg, early_stopping_rounds = 100,verbose=False)
+                gscv.fit(trainX, trainY,eval_set = eval_set, eval_metric=mape_xg,early_stopping_rounds = 15,verbose=True)
                 evals_result = gscv.evals_result()
-                print np.min([float(x) for x in evals_result['validation_1']['error']])
+                evals_result = [float(x) for x in evals_result['validation_1']['error']]
+                print np.max(evals_result),np.argmax(evals_result)
+                pred = gscv.predict(valX)
+                print pair_wise_classification_accuracy(valY,pred)
+                print median_absolute_percentage_error(valY,pred)
+                print mean_absolute_percentage_error(valY,pred)
+                print met.explained_variance_score(valY,pred)
+                print met.r2_score(valY,pred)
+                print quantized_classification_accuracy(valY,pred,2)
             else:
-                gscv = GridSearchCV(baseReg,paramGridAll, scoring = customScorerPWCA,cv = 5, n_jobs=-1, refit = True,verbose = 1)
-                gscv.fit(dataX, dataY[:,l])
-                #score = cross.cross_val_score(baseReg, dataX, dataY[:,l], scoring = 'mean_squared_error',cv = 10, n_jobs=8)
+                gscv = GridSearchCV(baseReg,paramGridAll, scoring = 'r2',cv = 5, n_jobs=-1, refit = True,verbose = 1)
+                gscv.fit(dataXT, dataYT)
                 score = gscv.best_score_
                 print gscv.best_params_
-                print 'score for social attr',l,labelList[l],-np.mean(score),'+-',np.std(score)
-                wmscore += -np.mean(score)
+                print 'score for social attr',l,labelList[l],np.mean(score),'+-',np.std(score)
+                wmscore += np.mean(score)
                 
             savePath = os.path.join(MODEL_PATH,MODEL_PREFIX+str(l)+'_'+labelList[l]+'.pkl')
             OF = open(savePath,'wb')
@@ -172,34 +232,46 @@ if __name__ == '__main__':
         
     elif sys.argv[1] == 'validation':
         assert len(sys.argv[2:]) >= 3,'usage: annoatation mat, pickled face feature, path to output the most and least face images'
-        dataY = sio.loadmat(sys.argv[2])['trait_annotation']
+        if TRAIN_DATA_MODE == 0:
+            dataY = sio.loadmat(sys.argv[2])['trait_annotation']
+        elif TRAIN_DATA_MODE == 1:
+            labelList,flist,dataY = us10kLoader(sys.argv[2])
+        else:
+            assert False, 'unsupported TRAIN_DATA_MODE'
         imName,dataX = pickle.load(open(sys.argv[3],'rb'))
+        imName,dataX = filterNaN(imName,dataX)
+        imNameSet = set([os.path.split(imn)[1] for imn in imName])
         outputPath = sys.argv[4]
         dataX = prep.minmax_scale(dataX)
-        assert dataX.shape[0] == dataY.shape[0]
+        if TRAIN_DATA_MODE == 0:
+            assert dataX.shape[0] == dataY.shape[0]
         numLabel = dataY.shape[1]
+        OF = open(os.path.join(RESULT_PATH,DATASET_PREF+MODEL_PREFIX+'_validation_results.csv'),'w')
+        print >>OF, 'index,name,r2_score,pair_wise_classification_accuracy,quantized classification accuracy_binary'
         for l in xrange(numLabel):
+            dataXT,dataYT = prepareData(dataX,dataY,l,imNameSet)
             savePath = os.path.join(MODEL_PATH,MODEL_PREFIX+str(l)+'_'+labelList[l]+'.pkl')
             rgr = pickle.load(open(savePath,'rb'))
-            pred = rgr.predict(dataX)
+            pred = rgr.predict(dataXT)
             argPredict = np.argsort(pred)
-            argTrue = np.argsort(dataY[:,l])
-            print 'attribute',labelList[l]
-            print 'mean,median,std for annotation',np.mean(dataY[:,l]),np.median(dataY[:,l]),np.std(dataY[:,l])
+            argTrue = np.argsort(dataYT)
+            print '>>>>>>>>>>>>>>>>>>>>'
+            print 'attribute',labelList[l],'training metrics (E_in)'
+            print 'mean,median,std for annotation',np.mean(dataYT),np.median(dataYT),np.std(dataYT)
             print 'mean,median,std for predicted',np.mean(pred),np.median(pred),np.std(pred)
-            print 'explained_variance_score',met.explained_variance_score(dataY[:,l],pred)
-            print 'r2_score',met.r2_score(dataY[:,l],pred)
-            print 'mean_squared_error',met.mean_squared_error(dataY[:,l],pred)
-            print 'mean_absolute_error',met.mean_absolute_error(dataY[:,l],pred)
-            print 'median_absolute_error',met.median_absolute_error(dataY[:,l],pred)
-            print 'mean_absolute_percentage_error',mean_absolute_percentage_error(dataY[:,l],pred)
-            print 'median_absolute_percentage_error',median_absolute_percentage_error(dataY[:,l],pred)
-            print 'almost_correct_value_percentage',almost_correct_value_percentage(dataY[:,l],pred,0.1)
-            print 'almost_correct_rank_percentage',almost_correct_rank_percentage(dataY[:,l],pred,10)
-            print 'pair_wise_classification_accuracy', pair_wise_classification_accuracy(dataY[:,l],pred)
+            print 'explained_variance_score',met.explained_variance_score(dataYT,pred)
+            print 'r2_score',met.r2_score(dataYT,pred)
+            print 'mean_squared_error',met.mean_squared_error(dataYT,pred)
+            print 'mean_absolute_error',met.mean_absolute_error(dataYT,pred)
+            print 'median_absolute_error',met.median_absolute_error(dataYT,pred)
+            print 'mean_absolute_percentage_error',mean_absolute_percentage_error(dataYT,pred)
+            print 'median_absolute_percentage_error',median_absolute_percentage_error(dataYT,pred)
+            print 'almost_correct_value_percentage',almost_correct_value_percentage(dataYT,pred,0.1)
+            print 'almost_correct_rank_percentage',almost_correct_rank_percentage(dataYT,pred,10)
+            print 'pair_wise_classification_accuracy', pair_wise_classification_accuracy(dataYT,pred)
             q = 2
             while q <= 32:
-                print 'quantized classification accuracy',q,'classes',quantized_classification_accuracy(dataY[:,l],pred,q)
+                print 'quantized classification accuracy',q,'classes',quantized_classification_accuracy(dataYT,pred,q)
                 q *= 2
             ct = 0
             def copyFaceImg(num,idx,surf):
@@ -220,14 +292,33 @@ if __name__ == '__main__':
                 copyFaceImg(n,i,'most')
                 if i in argTrue[-ARG_LEN:]:
                     ct+=1
+            importantMetric = []
             print 'most ones hit',ct
-            
-            
+            print '==================='
+            print 'attribute',labelList[l],'cross validation metrics (E_val)'
+            score = cross.cross_val_score(rgr.best_estimator_, dataXT, dataYT, scoring = 'r2',cv = 5, n_jobs=-1)
+            print 'r2',np.mean(score),'+-',np.std(score)
+            importantMetric.append(np.mean(score))
+            score = cross.cross_val_score(rgr.best_estimator_, dataXT, dataYT, scoring = 'mean_squared_error',cv = 5, n_jobs=-1)
+            print 'mean_squared_error',np.mean(score),'+-',np.std(score)
+            score = cross.cross_val_score(rgr.best_estimator_, dataXT, dataYT, scoring = 'median_absolute_error',cv = 5, n_jobs=-1)
+            print 'median_absolute_error',np.mean(score),'+-',np.std(score)
+            score = cross.cross_val_score(rgr.best_estimator_, dataXT, dataYT, scoring = customScorerPWCA,cv = 5, n_jobs=-1)
+            print 'pair_wise_classification_accuracy',np.mean(score),'+-',np.std(score)
+            importantMetric.append(np.mean(score))
+            score = cross.cross_val_score(rgr.best_estimator_, dataXT, dataYT, scoring = customScorerQCA2,cv = 5, n_jobs=-1)
+            print 'quantized classification accuracy - binary',np.mean(score),'+-',np.std(score)
+            importantMetric.append(np.mean(score))
+
+            print >>OF, str(l)+','+labelList[l]+','+','.join([str(m) for m in importantMetric])
+        OF.close()
     elif sys.argv[1] == 'transfer':
         if SCALE_MODE == 0:
             assert len(sys.argv[2:]) >= 2, 'usage: pickled statue face feature, path to write the social evaluation result'
         else:
             assert len(sys.argv[2:]) >= 3, 'usage: pickled statue face feature, path to write the social evaluation result, pickled photo face feature'
+        if TRAIN_DATA_MODE != 0:
+            labelList,flist,dataY = us10kLoader(sys.argv[-1])
         imName,dataX = pickle.load(open(sys.argv[2],'rb'))
         imName,dataX = filterNaN(imName,dataX)
         if SCALE_MODE == 1:
@@ -250,6 +341,9 @@ if __name__ == '__main__':
         
     elif sys.argv[1] == 'analysis':
         assert len(sys.argv[2:]) >= 2,'usage: pickled keyword analysis result, pickled social evalution result'
+        if TRAIN_DATA_MODE != 0:
+            assert len(sys.argv[2:]) >= 3,'must provide label list txt file'
+            labelList,flist,dataY = us10kLoader(sys.argv[-1])
         numLabel = len(labelList)
         portId,stats, wdCount = pickle.load(open(sys.argv[2],'rb'))
         imName,socialEval = pickle.load(open(sys.argv[3],'rb'))
@@ -280,7 +374,7 @@ if __name__ == '__main__':
         commonData = np.concatenate([commonWC,commonEval], axis = 1)
         corr = np.corrcoef(commonData,rowvar = 0)[:,-numLabel:]
         stats += [[l,1] for l in labelList]
-        OF = open(RESULT_PATH+'correlationKeywordsSocialEval.csv','w')
+        OF = open(RESULT_PATH+DATASET_PREF+'correlationKeywordsSocialEval.csv','w')
         tstr = ''
         for s in labelList:
             tstr+=','+s
@@ -300,7 +394,7 @@ if __name__ == '__main__':
         corrPairs.sort(key = lambda x:abs(x[2]))
         corrPairs.reverse()
 
-        OF = open(RESULT_PATH+'keywordSocialCorrPairsSorted.csv','w')
+        OF = open(RESULT_PATH+DATASET_PREF+'keywordSocialCorrPairsSorted.csv','w')
         for k,s,c in corrPairs:
             tstr = k+','+s+','+ "{:.4f}".format(c)
             print>>OF,tstr
@@ -310,6 +404,10 @@ if __name__ == '__main__':
         imName,socialEval = pickle.load(open(sys.argv[2],'rb'))
         outputPath = sys.argv[3]
         facePath = sys.argv[4]
+        if TRAIN_DATA_MODE != 0:
+            assert len(sys.argv[2:]) >= 4,'must provide label list txt file'
+            labelList,flist,dataY = us10kLoader(sys.argv[-1])
+            
         def copyFaceImg(idx,surf,lab, asort):
             fname = os.path.split(imName[asort[idx]])[1]
             if IMG_MODE == 1:
@@ -336,14 +434,22 @@ if __name__ == '__main__':
         imName,socialEval = pickle.load(open(sys.argv[2],'rb'))
         imName,dataX = pickle.load(open(sys.argv[3],'rb'))
         dataX = prep.minmax_scale(dataX)
-        dataY = sio.loadmat(sys.argv[4])['trait_annotation']
-        fig = plt.figure(1, figsize=(9, 6))
+        if TRAIN_DATA_MODE == 0:
+            dataY = sio.loadmat(sys.argv[4])['trait_annotation']
+        elif TRAIN_DATA_MODE == 1:
+            labelList,flist,dataY = us10kLoader(sys.argv[4])
+            lines = open(os.path.join(RESULT_PATH,DATASET_PREF+MODEL_PREFIX+'_validation_results.csv'),'r').readlines()[1:]
+        else:
+            assert False, 'unsupported TRAIN_DATA_MODE'
+        fig = plt.figure(1, figsize=(36, 18))
         numLabel = len(labelList)
         for l in xrange(numLabel):
             savePath = os.path.join(MODEL_PATH,MODEL_PREFIX+str(l)+'_'+labelList[l]+'.pkl')
             rgr = pickle.load(open(savePath,'rb'))
             print ">>>>>>>>>>"
             print 'statistics for',labelList[l]
+            if TRAIN_DATA_MODE == 1:
+                print 'validation r2_score is',lines[l].split(',')[2]
             def printStat(arr,name):
                 print name
                 tmean,tstd = np.mean(arr),np.std(arr)
@@ -352,7 +458,11 @@ if __name__ == '__main__':
                 print name
                 p1 = stats.shapiro(arr)[1]
                 p2 = stats.normaltest(arr)[1]
-                print 'p-value from W-test and normal-test',p1,p2
+                if p1+p2 > 0.9:
+                    res = 'normally distributed'
+                else:
+                    res = 'not normal'
+                print 'p-value from W-test and normal-test',p1,p2,res
             def ZCheck(a,b):
                 e1,e2 = np.mean(a),np.mean(b)
                 s1,s2 = np.std(a),np.std(b)
@@ -361,7 +471,7 @@ if __name__ == '__main__':
                 return np.abs(Z)
                 
             pred = rgr.predict(dataX)
-            anno = dataY[:,l]
+            anno = fixAnno(dataY[:,l])
             printStat(anno,'annotation')
             printStat(pred,'predicted')
             trans = socialEval[:,l]
@@ -389,7 +499,7 @@ if __name__ == '__main__':
             print 'creating boxplot for',labelList[l]
             data_to_plot = [anno, pred, trans]
             # Create an axes instance
-            ax = fig.add_subplot(2,7,l+1)
+            ax = fig.add_subplot(PLOT_D1,PLOT_D2,l+1)
             ax.set_title(labelList[l])
             ## add patch_artist=True option to ax.boxplot() 
             ## to get fill color
@@ -416,6 +526,7 @@ if __name__ == '__main__':
                 ## change the style of fliers and their fill
             for flier in bp['fliers']: #fliers
                 flier.set(marker='o', color='k', alpha=0.5)
+        fig.savefig(os.path.join(FIG_PATH,DATASET_PREF+'_compare.png'))
         plt.show(fig)
     else:
         print 'please use train, transfer, validation, analysis, argsort or compare command'
