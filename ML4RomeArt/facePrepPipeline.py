@@ -68,6 +68,7 @@ imgDim = 256
 ENLARGE = 1.25
 
 MODE = 1
+FILTER_MODE = 1
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
@@ -83,6 +84,8 @@ if __name__ == '__main__':
         os.mkdir(outputDir)
     if os.path.isdir(outputDir):
         filterListFile = open(os.path.join(outputDir,'filtered_list.txt'),'w')
+        if FILTER_MODE == 1:
+            goodList = open(os.path.join(outputDir,'good_list.txt'),'w')
     else:
         print('Directory doesnt exists')
         exit()
@@ -94,6 +97,7 @@ if __name__ == '__main__':
     win = dlib.image_window()
     if MODE == 1:
         fronter = getDefaultFrontalizer()
+    cv2.namedWindow('normalizedFace')
     for f in glob.glob(os.path.join(faces_folder_path, "*.jpg")):
         print("Processing file: {}".format(f))
         img = io.imread(f)
@@ -118,7 +122,10 @@ if __name__ == '__main__':
         print("Detection with max area: Left: {} Top: {} Right: {} Bottom: {}".format(
             d.left(), d.top(), d.right(), d.bottom()))
         # Get the landmarks/parts for the face in box d.
+        win.clear_overlay()
+        win.set_image(img)
         shape = predictor(img, d)
+        win.add_overlay(shape)
         #print("Part 0: {}, Part 1: {} ...".format(shape.part(0),shape.part(1)))
         landmarks = list(map(lambda p: (p.x, p.y), shape.parts()))
         npLandmarks = np.float32(landmarks)
@@ -133,8 +140,13 @@ if __name__ == '__main__':
             cut = thumbnail.shape[0]/8
             thumbnail = thumbnail[cut:thumbnail.shape[0]-cut,cut:thumbnail.shape[1]-cut,:].copy()
             fnSurf = '_frontal.jpg'
-        win.set_image(thumbnail)
+        cv2.imshow('normalizedFace',thumbnail)
         imPath, imName = os.path.split(f)
+        if FILTER_MODE == 1:
+            k = cv2.waitKey(-1)
+            if k == 49:
+                print 'good',imName
+                print >> goodList, imName
         print >>filterListFile, imName,d.left(),d.top(),d.right(),d.bottom(),landmarks
         io.imsave(os.path.join(outputDir,imName+fnSurf),thumbnail)
         sys.stdout.flush()
