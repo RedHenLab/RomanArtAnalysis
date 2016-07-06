@@ -22,17 +22,24 @@ from scipy import stats
 from outliers import smirnov_grubbs as grubbs
 from dataLoder import us10kLoader
 
+parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parentdir)
+
+from FaceFrontalisation.facefrontal import getDefaultFrontalizer
+
+
 labelList = ['Old', 'Masculine', 'Baby-faced', 'Competent', 'Attractive', 'Energetic', \
              'Well-groomed', 'Intelligent', 'Honest', 'Generous', \
              'Trustworthy', 'Confident', 'Rich', 'Dominant']
 
-MODEL_PATH = '/home/mfs6174/GSOC2016/GSoC2016-RedHen/models/US10K'
 FIG_PATH = '/home/mfs6174/GSOC2016/GSoC2016-RedHen/Code/ML4RomeArt/Figures'
 #MODEL_PREFIX = 'social_landmarks_XGB_MAPE_FRFULL'
 #MODEL_PREFIX = 'social_landmarks_SVR_PWCA_FRNR'
 #MODEL_PREFIX = 'social_landmarks_SVR_'
-MODEL_PREFIX = 'social_landmarks_SVR_PWCA_FRFULL'
 MODEL_PREFIX = 'social_landmarks_NUSVR_PWCA_FRFULL'
+MODEL_PATH = '/home/mfs6174/GSOC2016/GSoC2016-RedHen/models/us10k'
+DATASET_PREF = 'us10k_'
+TRAIN_DATA_MODE = 1
 
 RESULT_PATH = 'keywordResults/'
 ARG_LEN = 30
@@ -40,8 +47,6 @@ ARG_LEN = 30
 IMG_MODE = 1
 REGRESSOR_MODE = 'SVR'
 SCALE_MODE = 1
-TRAIN_DATA_MODE = 1
-DATASET_PREF = 'us10K_'
 PLOT_D1 = 5
 PLOT_D2 = 10
 
@@ -187,12 +192,13 @@ if __name__ == '__main__':
 
         paramGridRbf = {'gamma':(0.0001,0.001,0.005,0.01,0.05,0.1,0.5,1.0),'C':(0.01,0.05,0.1,0.3,0.5,0.7,1.0,1.25,1.5,2.0,3.0,5.0,8.0,10.0,20.0,40.0,60.0,100.0,500.0,1000.0),'kernel':('rbf',),'epsilon':(0.01,0.02,0.05,0.075,0.1,0.2,0.3,0.4,0.5,0.8,1.0)}
         paramGridRbfC = {'gamma':(0.0001,0.0005,0.001,0.005,0.01,0.05,0.1,0.5,1.0,5.0,10.0,50.0),'C':(0.0001,0.001,0.01,0.05,0.1,0.5,1.0,5.0,10.0,50.0,100.0,500.0,1000.0),'kernel':('rbf',),'epsilon':(0.001,0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6)}
-        paramGridRbfNuCC = {'gamma':(0.0001,0.0005,0.001,0.01,0.1,1.0),'C':(0.01,0.1,0.5,1.0,5.0,10.0,50.0,100.0,500.0),'kernel':('rbf',),'nu':(0.01,0.1,0.3,0.5,0.7,0.9,0.99)}
+        paramGridRbfNuCC = {'gamma':(0.0001,0.0005,0.001,0.01,0.1,1.0,10.0),'C':(0.01,0.1,0.5,1.0,5.0,10.0,50.0,100.0,500.0),'kernel':('rbf',),'nu':(0.01,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.99)}
+        paramGridLinearNuCC = {'C':(0.01,0.1,0.5,1.0,5.0,10.0,50.0,100.0,500.0),'kernel':('linear',),'nu':(0.01,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.99)}
         paramGridLibLinear = {'C':(0.0001,0.001,0.01,0.05,0.1,0.5,1.0,5.0,10.0,50.0,100.0,500.0,1000.0),'epsilon':(0.001,0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6)}
         #paramGridAll = [paramGridLinear,paramGridRbf]
         #paramGridAll = [paramGridLinearC,paramGridRbfC]
         #paramGridAll = [paramGridLibLinear]
-        paramGridAll = [paramGridRbfNuCC]
+        paramGridAll = [paramGridRbfNuCC,paramGridLinearNuCC]
         for l in xrange(numLabel):
             print 'label',l,labelList[l]
             dataXT,dataYT = prepareData(dataX,dataY,l,imNameSet)
@@ -315,9 +321,12 @@ if __name__ == '__main__':
     elif sys.argv[1] == 'transfer':
         if SCALE_MODE == 0:
             assert len(sys.argv[2:]) >= 2, 'usage: pickled statue face feature, path to write the social evaluation result'
+            pp = 2
         else:
             assert len(sys.argv[2:]) >= 3, 'usage: pickled statue face feature, path to write the social evaluation result, pickled photo face feature'
+            pp = 3
         if TRAIN_DATA_MODE != 0:
+            assert len(sys.argv[2:]) >= pp+1, 'must provide label list txt file'
             labelList,flist,dataY = us10kLoader(sys.argv[-1])
         imName,dataX = pickle.load(open(sys.argv[2],'rb'))
         imName,dataX = filterNaN(imName,dataX)
@@ -338,7 +347,32 @@ if __name__ == '__main__':
         OF = open(sys.argv[3],'wb')
         pickle.dump((imName,socialEval),OF,-1)
         OF.close()
-        
+
+    elif sys.argv[1] == 'show':
+        assert len(sys.argv[2:]) >= 3,'usage: pickled social evaluation results, outputpath, good list path'
+        imName,socialEval = pickle.load(open(sys.argv[2],'rb'))
+        outputPath = sys.argv[3]
+        goodPath = sys.argv[4]
+        goodList = set([s.strip() for s in open(goodPath,'r').readlines()])
+        if TRAIN_DATA_MODE != 0:
+            assert len(sys.argv[2:]) >= 4,'must provide label list txt file'
+            labelList,flist,dataY = us10kLoader(sys.argv[-1])
+        attrRange = np.max(socialEval),np.min(socialEval)
+        plt.figure(figsize=(10,20))
+        for i,n in enumerate(imName):
+            s = os.path.split(n)[1]
+            if s not in goodList:
+                continue
+            y_pos = np.arange(len(labelList))
+            plt.clf()
+            plt.barh(y_pos, socialEval[i,:], facecolor='#9999ff', edgecolor='white')
+            plt.yticks(y_pos, labelList)
+            plt.xlabel('predicted values')
+            for y in y_pos:
+                plt.text(socialEval[i,y] + 0.1, y + 0.6, '%.2f' % socialEval[i,y], ha='center', va='bottom')
+            plt.xlim(attrRange[1]-0.1, attrRange[0]+0.1)
+            plt.savefig(os.path.join(outputPath,s+'_'+DATASET_PREF+'_Attributes.png'))
+
     elif sys.argv[1] == 'analysis':
         assert len(sys.argv[2:]) >= 2,'usage: pickled keyword analysis result, pickled social evalution result'
         if TRAIN_DATA_MODE != 0:
@@ -526,7 +560,7 @@ if __name__ == '__main__':
                 ## change the style of fliers and their fill
             for flier in bp['fliers']: #fliers
                 flier.set(marker='o', color='k', alpha=0.5)
-        fig.savefig(os.path.join(FIG_PATH,DATASET_PREF+'_compare.png'))
+        fig.savefig(os.path.join(FIG_PATH,DATASET_PREF+'_'+os.path.split(sys.argv[2])[1]+'_compare.png'))
         plt.show(fig)
     else:
         print 'please use train, transfer, validation, analysis, argsort or compare command'
