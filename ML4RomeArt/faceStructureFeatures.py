@@ -24,7 +24,7 @@ sys.path.append(parentdir)
 
 from FaceFrontalisation.facefrontal import getDefaultFrontalizer
 
-MODE = 1
+NORM_MODE = 1
 LOAD_MODE = 0
 
 TEMPLATE = np.float32([
@@ -99,7 +99,7 @@ def getNormalizedLandmarks(img, predictor, d, fronter = None, win2 = None):
     shape = predictor(img, d)
     landmarks = list(map(lambda p: (p.x, p.y), shape.parts()))
     npLandmarks = np.float32(landmarks)
-    if MODE == 0:
+    if NORM_MODE == 0:
         npLandmarkIndices = np.array(landmarkIndices)            
         H = cv2.getAffineTransform(npLandmarks[npLandmarkIndices],
                                 MINMAX_TEMPLATE[npLandmarkIndices])
@@ -120,7 +120,7 @@ def getNormalizedLandmarks(img, predictor, d, fronter = None, win2 = None):
         landmarks = list(map(lambda p: (float(p.x)/thumbnail.shape[0], float(p.y)/thumbnail.shape[1]), newShape.parts()))
         npLandmarks = np.float32(landmarks)
         normLM = npLandmarks
-    return normLM,shape
+        return normLM,shape,thumbnail
         
         
 
@@ -128,7 +128,10 @@ def extractFaceFeature(img, predictor, d, fronter = None, win2 = None):
     ret = getNormalizedLandmarks(img, predictor, d, fronter, win2)
     if ret == False:
         return False
-    normLM,shape = ret
+    if NORM_MODE == 0:
+        normLM,shape = ret
+    else:
+        normLM,shape,normIM = ret
     #length group
     lew = edis(normLM[36],normLM[39]) #left eye width
     rew = edis(normLM[42],normLM[45]) #right eye width
@@ -200,31 +203,24 @@ def extractFaceFeature(img, predictor, d, fronter = None, win2 = None):
     features = features.reshape((1,features.shape[0]))
     points  = normLM.reshape((1,-1))
     fullFeatures = np.concatenate((features, points), axis = 1)
-    return fullFeatures,shape
-    
-if __name__ == '__main__':
-    assert len(sys.argv) > 1
-    faces_folder_path = sys.argv[1]
-    detector = dlib.get_frontal_face_detector()
-    predictor = dlib.shape_predictor(predictor_path)
-    imNames = []
-    features = []
-    win = dlib.image_window()
-    win2 = dlib.image_window()
-    if LOAD_MODE == 0:
-        flist = glob.glob(os.path.join(faces_folder_path, "*.jpg"))
-        flist.sort()
-    elif LOAD_MODE == 1:
-        assert len(sys.argv) > 3
-        labelList,flist,dataY = us10kLoader(sys.argv[3],faces_folder_path)
+    if NORM_MODE == 0:
+        ret = fullFeatures,shape
     else:
-        assert False,'unsupported load mode'
-    fronter = getDefaultFrontalizer()
-    for n,f in enumerate(flist):
-        if not os.path.isfile(f):
-            continue
-        print("Processing file: {}".format(f))
-        img = io.imread(f)
+        ret = fullFeatures,shape,normIM
+    return ret 
+
+class faceStructureExtractor:
+    def __init__(self, visulize = True):
+        self.detector = dlib.get_frontal_face_detector()
+        self.predictor = dlib.shape_predictor(predictor_path)
+        self.fronter = getDefaultFrontalizer()
+        if visulize:
+            self.win = dlib.image_window()
+            self.win2 = dlib.image_window()
+        else:
+            self.win = self.win2 = None
+
+    def extract(self,img):
         if len(img.shape) < 3:
             cimg = np.ndarray((img.shape[0],img.shape[1],3),dtype = 'uint8')
             for k in xrange(3):
@@ -233,12 +229,13 @@ if __name__ == '__main__':
         # Ask the detector to find the bounding boxes of each face. The 1 in the
         # second argument indicates that we should upsample the image 1 time. This
         # will make everything bigger and allow us to detect more faces.
-        dets = detector(img, 1)
-        win.clear_overlay()
-        win.set_image(img)
+        dets = self.detector(img, 1)
+        if self.win is not None:
+            self.win.clear_overlay()
+            self.win.set_image(img)
         if len(dets) < 1:
             print "No face detected, skipping"
-            continue
+            return False
         print("Number of faces detected: {}".format(len(dets)))
         maxArea = -1
         for k, d in enumerate(dets):
@@ -247,24 +244,55 @@ if __name__ == '__main__':
         d = maxD
         print("Detection with max area: Left: {} Top: {} Right: {} Bottom: {}".format(
             d.left(), d.top(), d.right(), d.bottom()))
-        ret = extractFaceFeature(img,predictor,d, fronter, win2)
+        ret = extractFaceFeature(img,self.predictor,d, self.fronter, self.win2)
         if ret == False:
-            continue
-        ft,shape = ret
-        win.add_overlay(shape)
-        dropFlag = False
-        #dlib.hit_enter_to_continue()
+            return False
+        if NORM_MODE == 0:
+            ft,shape = ret
+        else:
+            ft,shape,normIM = ret
+        if self.win is not None:
+            self.win.add_overlay(shape)
         for i in xrange(ft.shape[1]):
             if math.isnan(ft[0,i]):
-                print i
-                dropFlag = True
-                print 'drop',f
-                dlib.hit_enter_to_continue()
-                break
-        if not dropFlag:
+                print 'dimension',i,'is nan'
+                #dlib.hit_enter_to_continue()
+                return False
+        if NORM_MODE == 0:
+            return ft
+        else:
+            return ft,normIM
+
+
+if __name__ == '__main__':
+    assert len(sys.argv) > 1
+    faces_folder_path = sys.argv[1]
+    imNames = []
+    features = []
+    if LOAD_MODE == 0:
+        flist = glob.glob(os.path.join(faces_folder_path, "*.jpg"))
+        flist.sort()
+    elif LOAD_MODE == 1:
+        assert len(sys.argv) > 3
+        labelList,flist,dataY = us10kLoader(sys.argv[3],faces_folder_path)
+    else:
+        assert False,'unsupported load mode'
+    myext = faceStructureExtractor()
+    for n,f in enumerate(flist):
+        if not os.path.isfile(f):
+            continue
+        print("Processing file: {}".format(f))
+        img = io.imread(f)
+        ret = myext.extract(img)
+        if ret == False:
+            print 'drop',f
+        else:
+            if NORM_MODE == 0:
+                ft = ret
+            else:
+                ft = ret[0]
             imNames.append(f)
-            features.append(ft)
-            
+            features.append(ft)    
     features = np.asarray(features, dtype = 'float')
     features = features.reshape((features.shape[0],features.shape[2]))
     OUTF = open(sys.argv[2],'wb')
