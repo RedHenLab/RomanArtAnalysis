@@ -22,6 +22,8 @@ from scipy import stats
 from outliers import smirnov_grubbs as grubbs
 from dataLoder import us10kLoader
 
+from sklearn.decomposition import PCA
+
 parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parentdir)
 
@@ -36,10 +38,10 @@ FIG_PATH = '/home/mfs6174/GSOC2016/GSoC2016-RedHen/Code/ML4RomeArt/Figures'
 #MODEL_PREFIX = 'social_landmarks_XGB_MAPE_FRFULL'
 #MODEL_PREFIX = 'social_landmarks_SVR_PWCA_FRNR'
 #MODEL_PREFIX = 'social_landmarks_SVR_'
-MODEL_PREFIX = 'social_landmarks_NUSVR_PWCA_FRFULL'
-MODEL_PATH = '/home/mfs6174/GSOC2016/GSoC2016-RedHen/models/us10k'
-DATASET_PREF = 'us10k_'
-TRAIN_DATA_MODE = 1
+MODEL_PREFIX = 'social_landmarks_NUSVR_R2_FRFULL'
+MODEL_PATH = '/home/mfs6174/GSOC2016/GSoC2016-RedHen/models/iccv15'
+DATASET_PREF = 'iccv15__'
+TRAIN_DATA_MODE = 0
 
 RESULT_PATH = 'keywordResults/'
 ARG_LEN = 30
@@ -49,6 +51,9 @@ REGRESSOR_MODE = 'SVR'
 SCALE_MODE = 1
 PLOT_D1 = 5
 PLOT_D2 = 10
+
+R2_THR = 0.0
+FIG_SIZE = 100
 
 def median_absolute_percentage_error(y_true, y_pred): 
     #y_true, y_pred = check_arrays(y_true, y_pred)
@@ -373,6 +378,78 @@ if __name__ == '__main__':
             plt.xlim(attrRange[1]-0.1, attrRange[0]+0.1)
             plt.savefig(os.path.join(outputPath,s+'_'+DATASET_PREF+'_Attributes.png'))
 
+    elif sys.argv[1] == 'pca':
+        assert len(sys.argv[2:]) >= 3,'usage: pickled keyword analysis result, pickled social evalution result, validation result'
+        if TRAIN_DATA_MODE != 0:
+            assert len(sys.argv[2:]) >= 4,'must provide label list txt file'
+            labelList,flist,dataY = us10kLoader(sys.argv[-1])
+        numLabel = len(labelList)
+        portId,stats, wdCount = pickle.load(open(sys.argv[2],'rb'))
+        imName,socialEvalOri = pickle.load(open(sys.argv[3],'rb'))
+        val = open(sys.argv[4],'r').readlines()
+        okCols = []
+        for i,line in enumerate(val[1:]):
+            sp = line.split(',')
+            r2 = float(sp[2])
+            if r2 >= R2_THR:
+                okCols.append(i)
+            else:
+                print 'drop column:',sp[0],sp[1]
+        socialEval = np.ndarray((socialEvalOri.shape[0],len(okCols)), dtype = 'float')
+        for i,c in enumerate(okCols):
+            socialEval[:,i] = socialEvalOri[:,c]
+        numLabel = len(okCols)
+        print 'new column number:',numLabel
+        imId = []
+        for n in imName:
+            f = os.path.split(n)[1]
+            imId.append(f[:f.rfind('_')])
+        print 'unique objects who have face evaluation', len(set(imId))
+        ohash = {}
+        for i,oid in enumerate(imId):
+            if oid not in ohash:
+                ohash[oid] = [socialEval[i,:],1]
+            else:
+                ohash[oid][0] += socialEval[i,:]
+                ohash[oid][1] += 1
+        for oid in ohash:
+            ohash[oid][0]/=ohash[oid][1]
+        commonID, commonWC, commonEval = [], [], []
+        for i,oid in enumerate(portId):
+            if oid in ohash:
+                commonID.append(oid)
+                commonWC.append(wdCount[i,:])
+                commonEval.append(ohash[oid][0])
+        commonWC = np.asarray(commonWC)
+        commonWC.reshape((commonWC.shape[0],-1))
+        commonEval = np.asarray(commonEval)
+        commonEval.reshape((commonEval.shape[0],-1))
+        portPCA = PCA(2, whiten = False)
+        eval2D = portPCA.fit_transform(commonEval)
+        print 'feature mean',portPCA.mean_,'ev ratio',portPCA.explained_variance_ratio_
+        coEval = np.concatenate([commonEval,eval2D], axis = 1)
+        corr = np.corrcoef(coEval,rowvar = 0)
+        evalCoord = corr[:numLabel, -2:]
+        kwCoord = np.ndarray((commonWC.shape[1],2), dtype = 'float')
+        print 'number of keywords', commonWC.shape[1]
+        for i in xrange(commonWC.shape[1]):
+            haveEval = commonEval[commonWC[:,i] > 0,:]
+            meanEval = (np.nanmean(haveEval, 0)-portPCA.mean_).reshape(1,numLabel)
+            meanEval = prep.normalize(meanEval, norm = 'l1', axis = 1)
+            kwCoord[i,:] = np.dot(meanEval, evalCoord)
+        plt.figure(figsize=(FIG_SIZE,FIG_SIZE))
+        plt.scatter(evalCoord[:,0],evalCoord[:,1],s=300,label='traits', marker = 'o', color = 'r')
+        for i in xrange(numLabel):
+            plt.text(evalCoord[i,0],evalCoord[i,1],labelList[okCols[i]] , ha='center', va='bottom')
+        plt.scatter(kwCoord[:,0],kwCoord[:,1], s=50, label = 'keywords', marker = 'x', color = 'b')
+        for i in xrange(commonWC.shape[1]):
+            plt.text(kwCoord[i,0],kwCoord[i,1],stats[i][0], fontsize = 'xx-small',ha='center', va='bottom')
+        plt.grid(True, linestyle = 'solid', linewidth = FIG_SIZE/10)
+        plt.legend()
+        plt.xlim(-1.1, 1.1)
+        plt.ylim(-1.1, 1.1)
+        #plt.show()
+        plt.savefig(os.path.join(FIG_PATH,DATASET_PREF+'_Attributes_Keywords.png'))
     elif sys.argv[1] == 'analysis':
         assert len(sys.argv[2:]) >= 2,'usage: pickled keyword analysis result, pickled social evalution result'
         if TRAIN_DATA_MODE != 0:
