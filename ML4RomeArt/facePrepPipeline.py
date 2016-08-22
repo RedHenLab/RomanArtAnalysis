@@ -65,10 +65,10 @@ INNER_EYES_AND_BOTTOM_LIP = [39, 42, 57]
 #: Landmark indices corresponding to the outer eyes and nose.
 OUTER_EYES_AND_NOSE = [36, 45, 33]
 imgDim = 256
-ENLARGE = 1.25
+ENLARGE = 1.6
 
-MODE = 1
-FILTER_MODE = 1
+MODE = 0
+FILTER_MODE = 0
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
@@ -94,7 +94,7 @@ if __name__ == '__main__':
 
     detector = dlib.get_frontal_face_detector()
     predictor = dlib.shape_predictor(predictor_path)
-    win = dlib.image_window()
+    #win = dlib.image_window()
     if MODE == 1:
         fronter = getDefaultFrontalizer()
     cv2.namedWindow('normalizedFace')
@@ -122,10 +122,10 @@ if __name__ == '__main__':
         print("Detection with max area: Left: {} Top: {} Right: {} Bottom: {}".format(
             d.left(), d.top(), d.right(), d.bottom()))
         # Get the landmarks/parts for the face in box d.
-        win.clear_overlay()
-        win.set_image(img)
+        #win.clear_overlay()
+        #win.set_image(img)
         shape = predictor(img, d)
-        win.add_overlay(shape)
+        #win.add_overlay(shape)
         #print("Part 0: {}, Part 1: {} ...".format(shape.part(0),shape.part(1)))
         landmarks = list(map(lambda p: (p.x, p.y), shape.parts()))
         npLandmarks = np.float32(landmarks)
@@ -140,7 +140,7 @@ if __name__ == '__main__':
             cut = thumbnail.shape[0]/8
             thumbnail = thumbnail[cut:thumbnail.shape[0]-cut,cut:thumbnail.shape[1]-cut,:].copy()
             fnSurf = '_frontal.jpg'
-        cv2.imshow('normalizedFace',thumbnail)
+        #cv2.imshow('normalizedFace',thumbnail)
         imPath, imName = os.path.split(f)
         if FILTER_MODE == 1:
             k = cv2.waitKey(-1)
