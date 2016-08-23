@@ -15,14 +15,14 @@ from sklearn.cross_validation import KFold
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Flatten
 from keras.layers.convolutional import Convolution2D, MaxPooling2D, \
-                                       ZeroPadding2D
+                                       ZeroPadding2D, AveragePooling2D
 from keras.callbacks import ModelCheckpoint,EarlyStopping
 from keras.layers.advanced_activations import PReLU
 from keras.regularizers import l2, activity_l2
 
 # from keras.layers.normalization import BatchNormalization
 # from keras.optimizers import Adam
-from keras.optimizers import SGD
+from keras.optimizers import SGD,Adam
 from keras.utils import np_utils
 from keras.models import model_from_json
 from sklearn.metrics import log_loss,accuracy_score,confusion_matrix
@@ -140,6 +140,23 @@ def split_validation_set(train, target, test_size):
                          random_state=random_state)
     return X_train, X_test, y_train, y_test
 
+def preprocess_data(train_data, img_rows,img_cols,color_type = 1, to01 = True):
+    if color_type == 1:
+        train_data = train_data.reshape(train_data.shape[0], color_type,
+                                        img_rows, img_cols)
+    else:
+        train_data = train_data.transpose((0, 3, 1, 2))
+    train_data = train_data.astype('float32')
+    if color_type != 1:
+        for c in range(3):
+            train_data[:, c, :, :] = train_data[:, c, :, :] - mean_pixel[c]
+    else:
+        train_data = train_data - np.mean(mean_pixel)
+    if to01:
+        train_data /= 255.0
+    return train_data
+    
+
 
 def read_and_normalize_and_shuffle_train_data(img_rows, img_cols, dataStr,
                                               color_type=1,shuffle = True, withID = False):
@@ -175,21 +192,9 @@ def read_and_normalize_and_shuffle_train_data(img_rows, img_cols, dataStr,
     train_target = np.array(train_target, dtype=np.uint8)
 
 
-    if color_type == 1:
-        train_data = train_data.reshape(train_data.shape[0], color_type,
-                                        img_rows, img_cols)
-    else:
-        train_data = train_data.transpose((0, 3, 1, 2))
-
     numLabel = int(dataStr[dataStr.rfind('-')+1:])
     train_target = np_utils.to_categorical(train_target, numLabel)
-    train_data = train_data.astype('float32')
-    if color_type != 1:
-        for c in range(3):
-            train_data[:, c, :, :] = train_data[:, c, :, :] - mean_pixel[c]
-    else:
-        train_data = train_data - np.mean(mean_pixel)
-    train_data /= 255.0
+    train_data = preprocess_data(train_data,img_rows,img_cols,color_type,to01=True)
     if shuffle:
         perm = permutation(len(train_target))
         train_data = train_data[perm]
@@ -294,8 +299,8 @@ def vgg_simple_model(img_rows, img_cols, color_type=1, outputLen = 2, _lr = 1e-2
     model = Sequential()
     model.add(ZeroPadding2D((1, 1), input_shape=(color_type,
                                                  img_rows, img_cols)))
-    conv_wd = 0.01
-    fc_wd = 0.05
+    conv_wd = 0.005
+    fc_wd = 0.01
     model.add(Convolution2D(32, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
     #model.add(PReLU())
     model.add(MaxPooling2D((2, 2), strides=(2, 2)))
@@ -318,6 +323,97 @@ def vgg_simple_model(img_rows, img_cols, color_type=1, outputLen = 2, _lr = 1e-2
     #model.add(PReLU())
     model.add(MaxPooling2D((2, 2), strides=(2, 2)))
 
+    model.add(Flatten())
+    #model.add(Dropout(0.5))
+    #model.add(Dense(256, activation='relu'))
+    #model.add(PReLU())
+    model.add(Dropout(0.5))
+    model.add(Dense(outputLen, activation='softmax', W_regularizer=l2(fc_wd)))
+
+    #model.load_weights('../pre-trained/vgg16_weights.h5')
+
+    # Code above loads pre-trained data and
+    print model.summary() 
+    # Learning rate is changed to 0.001
+    sgd = SGD(lr=_lr, decay=1e-5, momentum=0.9, nesterov=True)
+    adm = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08)
+    model.compile(optimizer=adm, loss='categorical_crossentropy', metrics=['accuracy'])
+    return model
+
+def very_small_model(img_rows, img_cols, color_type=1, outputLen = 2, _lr = 1e-2):
+    model = Sequential()
+    model.add(ZeroPadding2D((1, 1), input_shape=(color_type,
+                                                 img_rows, img_cols)))
+    conv_wd = 0.01
+    fc_wd = 0.05
+    model.add(Convolution2D(16, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
+    #model.add(PReLU())
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    #model.add(Dropout(0.5))
+
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Convolution2D(32, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
+    #model.add(PReLU())
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    #model.add(Dropout(0.5))
+        
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Convolution2D(64, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
+    #model.add(PReLU())
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    #model.add(Dropout(0.5))
+
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Convolution2D(128, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
+    #model.add(PReLU())
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+
+    model.add(Flatten())
+    #model.add(Dropout(0.5))
+    #model.add(Dense(256, activation='relu'))
+    #model.add(PReLU())
+    model.add(Dropout(0.5))
+    model.add(Dense(outputLen, activation='softmax', W_regularizer=l2(fc_wd)))
+
+    #model.load_weights('../pre-trained/vgg16_weights.h5')
+
+    # Code above loads pre-trained data and
+    print model.summary() 
+    # Learning rate is changed to 0.001
+    sgd = SGD(lr=_lr, decay=1e-5, momentum=0.9, nesterov=True)
+    adm = Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08)
+    model.compile(optimizer=adm, loss='categorical_crossentropy', metrics=['accuracy'])
+    return model
+
+def fc_simple_model(img_rows, img_cols, color_type=1, outputLen = 2, _lr = 1e-2):
+    model = Sequential()
+    model.add(ZeroPadding2D((1, 1), input_shape=(color_type,
+                                                 img_rows, img_cols)))
+    conv_wd = 0.005
+    fc_wd = 0.05
+    model.add(Convolution2D(32, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
+    #model.add(PReLU())
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    #model.add(Dropout(0.5))
+
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Convolution2D(64, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
+    #model.add(PReLU())
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    #model.add(Dropout(0.5))
+        
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Convolution2D(128, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
+    #model.add(PReLU())
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    #model.add(Dropout(0.5))
+
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Convolution2D(256, 3, 3, activation='relu', W_regularizer=l2(conv_wd)))
+    #model.add(PReLU())
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    model.add(MaxPooling2D((4, 4)))
+    #model.add(AveragePooling2D((4, 4)))
     model.add(Flatten())
     #model.add(Dropout(0.5))
     #model.add(Dense(256, activation='relu'))
@@ -378,7 +474,7 @@ class simplePrint(keras.callbacks.Callback):
             self.best = 1e100
             
         
-def run_cross_validation(dataStr, nfolds=5, nb_epoch=10, modelStr='', lr = 1e-2, withID = False):
+def run_cross_validation(modelGen, dataStr, nfolds=5, nb_epoch=10, modelStr='', lr = 1e-2, withID = False):
 
     # input image dimensions
     #img_rows, img_cols = 224, 224
@@ -412,9 +508,9 @@ def run_cross_validation(dataStr, nfolds=5, nb_epoch=10, modelStr='', lr = 1e-2,
         else:
             train_data_d, train_target_d = train_data[train_po], train_target[train_po]
             val_data, val_target = train_data[test_po], train_target[test_po]
-        train_data_d, train_target_d = forceBalance(train_data_d, train_target_d)
-        val_data, val_target = forceBalance(val_data, val_target)
-        model = vgg_simple_model(img_rows, img_cols, color_type_global, outputLen, lr)
+        #train_data_d, train_target_d = forceBalance(train_data_d, train_target_d)
+        #val_data, val_target = forceBalance(val_data, val_target)
+        model = modelGen(img_rows, img_cols, color_type_global, outputLen, lr)
         print 'model loaded'
         checkPoints = ModelCheckpoint('cache/'+dataStr+'_'+modelStr+'_fold_'+str(num_fold)+'weights.best.hdf5',
                                       monitor='val_acc', verbose=1, save_best_only=True, mode='max')
@@ -482,17 +578,19 @@ def cv_validate_with_best_epoch(dataStr, best_models, save_path = None, withID =
     print conf_mat
     return predictions_all
 
-
-# nfolds, nb_epoch, split
-#run_cross_validation('merge.gender-2',10, 500, '_vgg_5_0.5e-2_10x500_valbyobj',lr = 0.5e-2, withID = True)
-#run_cross_validation('ls.ox.uk.beard-4',10, 500, '_vgg_5_1e-2_10x500_valbyobj',lr = 1e-2, withID = True)
-
-
-def cv_validate_with_best_epoch_wrapper(dataStr, modelStr, nFold, cache_path, withID = False):
-    models = [(dataStr+'_architecture'+str(i+1)+modelStr+'.json', dataStr+'_'+modelStr+'_fold_'+str(i+1)+'weights.best.hdf5') for i in xrange(nFold)]
-    cv_validate_with_best_epoch(dataStr, models, cache_path, withID)
-
-#cache_path = os.path.join('cache', 'val_merge.gender-2_bestval.dat')
-#cv_validate_with_best_epoch_wrapper('merge.gender-2','_vgg_5_0.5e-2_10x500_valbyobj',10,cache_path, withID =True)
-cache_path = os.path.join('cache', 'ls.ox.uk.beard-4_bestval.dat')
-cv_validate_with_best_epoch_wrapper('ls.ox.uk.beard-4','_vgg_5_1e-2_10x500_valbyobj',10,cache_path, withID =True)
+if __name__ == '__main__':
+    # nfolds, nb_epoch, split
+    #run_cross_validation(vgg_simple_model, 'merge.gender-2',10, 500, '_vgg_5_adamDefault_10x500_valbyobj',lr = 1e-2, withID = True)
+    #run_cross_validation('ls.ox.uk.beard-4',10, 500, '_vgg_5_1e-2_10x500_valbyobj',lr = 1e-2, withID = True)
+    run_cross_validation(very_small_model, 'years-2',10, 500, '_vs_5_adamDefault_10x500_productionYear',lr = 1e-2, withID = False)
+    
+    def cv_validate_with_best_epoch_wrapper(dataStr, modelStr, nFold, cache_path, withID = False):
+        models = [(dataStr+'_architecture'+str(i+1)+modelStr+'.json', dataStr+'_'+modelStr+'_fold_'+str(i+1)+'weights.best.hdf5') for i in xrange(nFold)]
+        cv_validate_with_best_epoch(dataStr, models, cache_path, withID)
+        
+    #cache_path = os.path.join('cache', 'val_merge.gender-2_bestval.dat')
+    #cv_validate_with_best_epoch_wrapper('merge.gender-2','_vgg_5_adamDefault_10x500_valbyobj',10,cache_path, withID =True)
+    cache_path = os.path.join('cache', 'val_years-2_bestval.dat')
+    cv_validate_with_best_epoch_wrapper('years-2','_vs_5_adamDefault_10x500_productionYear',10,cache_path, withID =False)
+    #cache_path = os.path.join('cache', 'ls.ox.uk.beard-4_bestval.dat')
+    #cv_validate_with_best_epoch_wrapper('ls.ox.uk.beard-4','_vgg_5_1e-2_10x500_valbyobj',10,cache_path, withID =True)
