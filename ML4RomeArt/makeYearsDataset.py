@@ -105,6 +105,9 @@ if __name__ == '__main__':
     allY.sort()
     t1 = allY[len(allY)/3]
     t2 = allY[len(allY)/3*2]
+    t1 = allY[len(allY)/2]
+    t1 = 96
+    t2 = 1000
     print t1,t2
     OF.close()
     OF = open(outPut+'_class.txt','w')
