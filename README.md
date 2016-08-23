@@ -6,7 +6,7 @@ The GSoC [project page](https://summerofcode.withgoogle.com/projects/#5484824705
 
 #Introduction
 
-This project is a research project for Google Summer of Code with Redhen lab. So I created this repository to contain my research code for experiments and analysis results instead of contributing to some existing redhen's code repository. As directed by my mentors, this project is focused on analysis of the images of ancient roman statues for their social value.
+This project is a **relatively independent research project** with Redhen lab. So **I created this repository to contain my research code for experiments and the analysis results instead of contributing to some existing code repository**. As directed by my mentors, this project is focused on analysis of the images of ancient roman statues for their social values. **I wrote most of the code in this repository to train classifiers and analyze data. Lots of analysis results (tables, figures and webpages) are produced which can help the experts in Redhen lab to analyze the meaning of communication of the ancient roman statues.**
 
 
 
@@ -230,7 +230,7 @@ For the production year classifier, the "filter 0" is keeping the "early" (befor
 
 3. US10K dataset with  ancientrome.ru database https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/Figures/us10K_arru_compare.png 
 
-4. US10K dataset with   laststatues.classics.ox.ac.u database https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/Figures/us10K_lsacuk_compare.png 
+4. US10K dataset with   laststatues.classics.ox.ac.uk database https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/Figures/us10K_lsacuk_compare.png 
 
 ##Dimension analysis figures between the predicted social variables and the keywords occurance for the roman statues database.
 
