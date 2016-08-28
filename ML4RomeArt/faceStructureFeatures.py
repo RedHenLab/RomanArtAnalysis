@@ -4,13 +4,7 @@ import sys,os
 import numpy as np
 import cPickle as pickle
 import gzip
-import sklearn
-from sklearn import preprocessing as prep
-from sklearn import cross_validation as cross
-from sklearn import metrics as met
-from sklearn.pipeline import Pipeline
 import glob
-import pandas as pd
 import math
 
 import cv2
