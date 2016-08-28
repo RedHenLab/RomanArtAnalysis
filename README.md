@@ -37,7 +37,7 @@ This project contains parts as follow:
 
 The HTMLParser and state machine is used for parsing the webpages of the databases and downloading images and meta-data.
 
-**related code:**
+###related code:
 
 1.  dataCollecting/downloader4\[database\].py: parsing the webpages and download the images. Because each database has totally different webpage structures, each downloader is designed particularlly for one certain database. The url of the database is already hard-coded into the code. 
 
@@ -61,7 +61,7 @@ All the roman art data on pisa is downloaded with this two tools.
 ##Simple Annotator for Roman Statue Images 
 An OpenCV high-gui based simple image annotation tool. This tool is used to annotate a set of images with a variable. The possible value of the variable can be two or more. The annotation results will be stored in a text file.
 
-**related code:**
+###related code:
 
 dataCollecting/simpleAnnotationTool.py
 
@@ -109,8 +109,9 @@ Press q to quit
 
 This pre-processing pipeline tool takes a list of images as input. It detects faces and face landmarks, then crop and align the largest face on each image.
 
-It supports 2 alignment mode: affine warp and face frontalization which can be selected in the code with the "MODE" swich. The usage: Give the path to the trained shape predictor model as the first argument and then the directory containing the facial images. The code will detetct faces, align the largest one, crop it and save it with "_crop.jpg" suffix.
-**related code:**
+It supports 2 alignment mode: affine warp and face frontalization which can be selected in the code with the "MODE" swich. The usage: Give the path to the trained shape predictor model as the first argument and then the directory containing the facial images. The code will detetct faces, align the largest one, crop it and save it with "\_crop.jpg" suffix.
+
+###related code:
 
 ML4RomeArtf/facePrepPipeline.py
 
@@ -123,6 +124,7 @@ This pre-processing pipeline support 2 mode: affine warp and face frontalization
 4. dlib (pip install dlib)
 5. dlib's trained shape predictor: http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
 6. All the dependencies of the shape frontalization part.
+
 ###Deployment Instructions:
 1. Download the shape predictor and unzip it.
 2. Set the MODE variable in the code.
@@ -134,7 +136,7 @@ http://pisa.vrnewsscape.ucla.edu/roman/rome101/show4us10k.html ) for samples. Th
 
 ##Face Frontalization
 
-**related code:**
+###related code:
 
 FaceFrontalisation/*
 
@@ -159,7 +161,7 @@ Regarding the database on laststatues.classics.ox.ac.uk: Using the text in each 
 I developed a script for automatic classifier training with the 179 dimensional features for all the keywords which occur > 10 times. Because most keywords lead to unbalanced classification problems, I use informative down-sampling on majority classes. Each ensembled classifier is composed of a bag of SVM classifiers , which are trained with the minority class samples and some majority class samples in the similar size with minority class samples sampled with bootstrapping and will vote to make predictions. The parameters for SVM were choose by grid search cross validation. You can see the results here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/keywordClassifiersROC.csv ). The Area Under the Curve (AUC) scores and the cross validation standard deviations for each keyword are shown. I selected the keywords with AUC >= 0.75 and STD <=  0.15 which I believe are reasonably classified. You can see it here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/keywordClassifiersROCGood.csv ). I think among those, the word "empress" is interesting. The reason of some of the keywords can be classified may be the keywords only occur in male or female statues, and the gender can be easily classified.
 
 
-**related code:**
+###related code:
 
 1. ML4RomeArt/keywordClassifiersFactory.py
 
@@ -177,7 +179,7 @@ I developed a script for automatic classifier training with the 179 dimensional 
 
 At first, I developed a feature extractor to extract structural features from statue faces. I use dlib's facial landmark detector to get 68 landmarks for each detected face.  I designed 43 geometry features based on some other reference papers and my own understanding. Some of them like height and width of faces, noses and eyes are similar with features in Jungseock's ICCV paper. The features also include some ratio, angle and elliptocytosis eccentricity values. The normalized coordinates of the landmarks are also used as features. The number of feature dimensions is 179 in total. I found that  the frontal face detector in dlib can detect lots of "not so frontal" faces. They are weird after the alignment with 2D affine transformation and lead to incorrect feature values. So I decide to use features extracted from frontalized faces  and  I modified the feature extractor to add more feature dimensions like the distance between every landmarks pair and so on. The dimension of the structure feature I am using now is 2200+. The large dimension should allow me to just train linear SVR instead of SVR with rbf kernel to get some fine results. So I can use Liblinear instead of LibSVM to speed up the grid search cross validation. 
 
-**related code:**
+###related code:
 
 ML4RomeArt/faceStructureFeatures.py
 
@@ -186,7 +188,6 @@ Same with Face Pre-process Pipeline part.
 
 
 ###Deployment Instructions:
-1. put all the images 
 
 ##Transfer Learning and Result Analysis for Social Value Inference of Roman Statue Faces
 I use the dataset for my mentor's ICCV paper on social dimensions of faces of politicians and the US10K dataset. The datasets contain facial photographs labeled with visual variables and social perceptions. I train regressors for these variables with geometry features on this dataset and use it to predict the variables for the statue faces (transfer learning). 
@@ -211,7 +212,7 @@ I have got the boxplot figures for annotation values and predicted values for ph
 
 As for the us10k dataset,  you can see the correlation coefficients analysis like I did on the last dataset here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/us10K_keywordSocialCorrPairsSorted.csv ) and here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/us10K_correlationKeywordsSocialEval.csv) .
 
-**related code:**
+###related code:
 
 1. ML4RomeArt/socialLearningFromStructure.py
 
@@ -221,18 +222,6 @@ As for the us10k dataset,  you can see the correlation coefficients analysis lik
 
 
 ##Convolutional Network Classifiers for Roman Statue Faces (Training and Testing Code)
-
-
-**related code:**
-
-1. ML4RomeArt/buildDatasetFromKeywords.py
-
-2. ML4RomeArt/makeYearsDataset.py
-
-3. ML4RomeArt/CNN4Portraits_keras.py
-
-
-
 
 I have developed a tool which can automatically build image classification dataset from the keywords. I built two datasets. The first one is gender dataset which is merged from one built from laststatues database with the gender field and another one built from ancientrome database with finding words like "man", "male", "female". It has 1805 images (1417 male, 388 female). The second one is beard dataset which is built from laststatues database with the beard field. It only has 704 images ( 88 long-bearded, 169 short-bearded, 201 stubble-bearded and 246 clean-shaven ).
 
@@ -251,12 +240,26 @@ The best results I have got for now is 83.16% average accuracy  for binary gende
 
 I also used the production year annotations provided by my mentors to build a dataset and train a CNN classifier. The classifier will predict if the statue is produced before 96 AD or not. The accuracy is 67.98%.
 
+###related code:
+
+1. ML4RomeArt/buildDatasetFromKeywords.py
+
+2. ML4RomeArt/makeYearsDataset.py
+
+3. ML4RomeArt/CNN4Portraits_keras.py
+
+
+
+
+
 
 
 
 ##Deconvolutional Network for visualization of the learned classifers.
 
-**related code:**
+I have implemented the deconv network described in this post and Zeiler's ECCV paper. The code I found on Github is just not the right implementation. So I had to rewrite it according to the paper. The deconvolution results are shown in result section.
+
+###related code:
 
 1. ML4RomeArt/DeconvTool/*
 
@@ -264,7 +267,6 @@ I also used the production year annotations provided by my mentors to build a da
 
 
 
-I have implemented the deconv network described in this post and Zeiler's ECCV paper. The code I found on Github is just not the right implementation. So I had to rewrite it according to the paper. The deconvolution results are shown in result section.
 
 
 
