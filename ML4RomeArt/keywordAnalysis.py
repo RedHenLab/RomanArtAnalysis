@@ -42,11 +42,13 @@ RESULT_PATH = 'keywordResults/'
 MAX_NUM = 20
 maxDf = 0.8
 minDf = 0.1
+FIELD_MASK = ['Attributes','Awarder','Beard','City','Clothing','Details','Earliest','Gender','Hairstyle', 'Honorand','Latest','Material', 'Object','Position', 'Province', 'Re-Use?', 'Region', 'Title']
+
 if __name__ == '__main__':
     totalDF = collectJson(sys.argv[1])
     print 'all the columns we have',totalDF.columns
     print 'the number of rows (subjects)',len(totalDF.index)
-    newDf  = totalDF[['Attributes','Awarder','Beard','City','Clothing','Details','Earliest','Gender','Hairstyle', 'Honorand','Latest','Material', 'Object','Position', 'Province', 'Re-Use?', 'Region', 'Title']]
+    newDf  = totalDF[FIELD_MASK]
     portId, portStr = [], []
     for po,rc in newDf.iterrows():
         portId.append(po)
