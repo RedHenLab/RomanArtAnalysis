@@ -33,11 +33,13 @@ This project contains parts as follow:
 
 #Method and Code Documentation
 
+The method to install the dependencies will be explained only when the first time the dependencies show up.
+
 ##Webpage Parsers and Crawlers for Data Collecting from Art Databases
 
 The HTMLParser and state machine is used for parsing the webpages of the databases and downloading images and meta-data.
 
-###related code:
+###Related Code:
 
 1.  dataCollecting/downloader4\[database\].py: parsing the webpages and download the images. Because each database has totally different webpage structures, each downloader is designed particularlly for one certain database. The url of the database is already hard-coded into the code. 
 
@@ -61,7 +63,7 @@ All the roman art data on pisa is downloaded with this two tools.
 ##Simple Annotator for Roman Statue Images 
 An OpenCV high-gui based simple image annotation tool. This tool is used to annotate a set of images with a variable. The possible value of the variable can be two or more. The annotation results will be stored in a text file.
 
-###related code:
+###Related Code:
 
 dataCollecting/simpleAnnotationTool.py
 
@@ -111,7 +113,7 @@ This pre-processing pipeline tool takes a list of images as input. It detects fa
 
 It supports 2 alignment mode: affine warp and face frontalization which can be selected in the code with the "MODE" swich. The usage: Give the path to the trained shape predictor model as the first argument and then the directory containing the facial images. The code will detetct faces, align the largest one, crop it and save it with "\_crop.jpg" suffix.
 
-###related code:
+###Related Code:
 
 ML4RomeArtf/facePrepPipeline.py
 
@@ -136,7 +138,7 @@ http://pisa.vrnewsscape.ucla.edu/roman/rome101/show4us10k.html ) for samples. Th
 
 ##Face Frontalization
 
-###related code:
+###Related Code:
 
 FaceFrontalisation/*
 
@@ -162,7 +164,7 @@ I developed a script for automatic classifier training with the 179 dimensional 
 
 
 **This part of the code is mainly used with the database on laststatues.classics.ox.ac.uk in this project. But if some other databases with details meta-data (like keywords) are available in the future, the code can be used with them too (need to change the field mask which is hard-coded in the code).**
-###related code:
+###Related Code:
 
 1. ML4RomeArt/keywordAnalysis.py
 
@@ -193,7 +195,7 @@ Please see the  ML4RomeArt/keywordResults directory in the repository.
 
 At first, I developed a feature extractor to extract structural features from statue faces. I use dlib's facial landmark detector to get 68 landmarks for each detected face.  I designed 43 geometry features based on some other reference papers and my own understanding. Some of them like height and width of faces, noses and eyes are similar with features in Jungseock's ICCV paper. The features also include some ratio, angle and elliptocytosis eccentricity values. The normalized coordinates of the landmarks are also used as features. The number of feature dimensions is 179 in total. I found that  the frontal face detector in dlib can detect lots of "not so frontal" faces. They are weird after the alignment with 2D affine transformation and lead to incorrect feature values. So I decide to use features extracted from frontalized faces  and  I modified the feature extractor to add more feature dimensions like the distance between every landmarks pair and so on. The dimension of the structure feature I am using now is 2200+. The large dimension should allow me to just train linear SVR instead of SVR with rbf kernel to get some fine results. So I can use Liblinear instead of LibSVM to speed up the grid search cross validation. 
 
-###related code:
+###Related Code:
 
 ML4RomeArt/faceStructureFeatures.py
 
@@ -223,7 +225,7 @@ I have got the boxplot figures for annotation values and predicted values for ph
 
 As for the us10k dataset,  you can see the correlation coefficients analysis like I did on the last dataset here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/us10K_keywordSocialCorrPairsSorted.csv ) and here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/us10K_correlationKeywordsSocialEval.csv) .
 
-###related code:
+###Related Code:
 
 1. ML4RomeArt/socialLearningFromStructure.py
 
@@ -267,7 +269,7 @@ The best results I have got for now is 83.16% average accuracy  for binary gende
 
 I also used the production year annotations provided by my mentors to build a dataset and train a CNN classifier. The classifier will predict if the statue is produced before 96 AD or not. The accuracy is 67.98%.
 
-###related code:
+###Related Code:
 
 1. ML4RomeArt/buildDatasetFromKeywords.py
 
@@ -275,21 +277,40 @@ I also used the production year annotations provided by my mentors to build a da
 
 3. ML4RomeArt/CNN4Portraits_keras.py
 
+###Dependencies
+1. Python 2.7
+2. python-sklearn
+3. numpy
+4. pandas
+5. keras (pip install Keras)
+
+###Deployment Instructions:
+
 
 ##Deconvolutional Network for visualization of the learned classifers.
 
 I have implemented the deconv network described in this post and Zeiler's ECCV paper. The code I found on Github is just not the right implementation. So I had to rewrite it according to the paper. The deconvolution results are shown in result section.
 
-###related code:
+###Related Code:
 
 1. ML4RomeArt/DeconvTool/*
 
 2. ML4RomeArt/sampleSubsetImages.py
 
 
+###Dependencies
+1. Python 2.7
+2. numpy
+3. matplotlib
+4. keras
+5. python-opencv
 
+###Deployment Instructions:
+1. Change the "target_layer" variable on the bottom of the DeconvTool/deconvTool.py code to the layer you would like to visualize.
+2. Run "python DeconvTool/deconvTool.py dataset-list-file network-architecture-file trained-network-weights-file number-of-labels". The code will produce a layer output visualization figure for each label.
 
-
+###Sample Output
+See the "Deconvolution visualization for the CNN classifiers" subsection in the "Results" section.
 
 #Results
 
@@ -305,11 +326,7 @@ http://pisa.vrnewsscape.ucla.edu/roman/rome101/show4us10k.html
 
 For the gender classifier, the "filter 0" is keeping the male activation and the "filter 1" is keeping the female activation. As far as I can see, it seems that there are some differences with the mouths ( woman's lips are rounded) , noses and eyes ( there are more shape shadow with man's noses and eyes).
 
-
-
 For the  beard classifier, filters 0/3 are keeping long-bearded/clean-shaven's activations.
-
-
 
 For the production year classifier, the "filter 0" is keeping the "early" (before 96 AD) activation and the "filter 1" is keeping the "late" (after 96 AD)  activation. You can see the patterns showing frowning with contracted corrugator muscles, and patterns about the iris and pupil of the eye in the "late" activation. 
 

@@ -8,7 +8,6 @@ import cv2
 import math
 import cPickle as pickle
 import datetime
-import pandas as pd
 
 from sklearn.cross_validation import train_test_split
 from sklearn.cross_validation import KFold
