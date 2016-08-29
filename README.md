@@ -6,7 +6,7 @@ The GSoC [project page](https://summerofcode.withgoogle.com/projects/#5484824705
 
 #Introduction
 
-This project is a **relatively independent research project** with Redhen lab. So **I created this repository to contain my research code for experiments and the analysis results instead of contributing to some existing code repository**. As directed by my mentors, this project is focused on analysis of the images of ancient roman statues for their social values. **I wrote most of the code in this repository to train classifiers and analyze data. Lots of analysis results (tables, figures and webpages) are produced which can help the experts in Redhen lab to analyze the meaning of communication of the ancient roman statues.**
+This project is a *relatively independent research project* with Redhen lab. So **I created this repository to contain my research code for experiments and the analysis results instead of contributing to some existing code repository**. As directed by my mentors, this project is focused on analysis of the images of ancient roman statues for their social values. **I wrote most of the code in this repository to train classifiers and analyze data. Lots of analysis results (tables, figures and webpages) are produced which can help the experts in Redhen lab to analyze the meaning of communication of the ancient roman statues.**
 
 
 
@@ -124,7 +124,7 @@ This pre-processing pipeline support 2 mode: affine warp and face frontalization
 2. OpenCV python bindings (pip install pyopencv or apt-get install python-opencv)
 3. skimage, numpy(apt-get install python-skimage python-numpy / or install with pip)
 4. dlib (pip install dlib)
-5. dlib's trained shape predictor: http://dlib.net/files/shape\_predictor\_68\_face\_landmarks.dat.bz2
+5. dlib's trained shape predictor: http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
 6. All the dependencies of the shape frontalization part.
 
 ###Deployment Instructions:
@@ -149,7 +149,7 @@ I modified the code and parameters from https://github.com/ChrisYang/facefrontal
 2. OpenCV python bindings (pip install pyopencv or apt-get install python-opencv)
 3. scipy, pyplot (can be installed with pip)
 4. dlib (pip install dlib)
-5. dlib's trained shape predictor: http://dlib.net/files/shape\_predictor\_68\_face\_landmarks.dat.bz2
+5. dlib's trained shape predictor: http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
 6. Pre-defined 3D model: already contained in the repository.
 
 ###Deployment Instructions:
@@ -223,7 +223,7 @@ I implemented Shapiro-Wilk test for normality to test the social attributes valu
 
 I have got the boxplot figures for annotation values and predicted values for photos and predicted values for statues (this is the order on the figures) . You can compare the photos and the statues with the boxplot.
 
-As for the us10k dataset,  you can see the correlation coefficients analysis like I did on the last dataset here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/us10K\_keywordSocialCorrPairsSorted.csv ) and here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/us10K\_correlationKeywordsSocialEval.csv) .
+As for the us10k dataset,  you can see the correlation coefficients analysis like I did on the last dataset here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/us10K_keywordSocialCorrPairsSorted.csv ) and here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/us10K_correlationKeywordsSocialEval.csv) .
 
 ###Related Code:
 
