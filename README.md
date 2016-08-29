@@ -124,7 +124,7 @@ This pre-processing pipeline support 2 mode: affine warp and face frontalization
 2. OpenCV python bindings (pip install pyopencv or apt-get install python-opencv)
 3. skimage, numpy(apt-get install python-skimage python-numpy / or install with pip)
 4. dlib (pip install dlib)
-5. dlib's trained shape predictor: http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
+5. dlib's trained shape predictor: http://dlib.net/files/shape\_predictor\_68\_face\_landmarks.dat.bz2
 6. All the dependencies of the shape frontalization part.
 
 ###Deployment Instructions:
@@ -140,7 +140,7 @@ http://pisa.vrnewsscape.ucla.edu/roman/rome101/show4us10k.html ) for samples. Th
 
 ###Related Code:
 
-FaceFrontalisation/*
+FaceFrontalisation/\*
 
 I modified the code and parameters from https://github.com/ChrisYang/facefrontalisation and use it for the pre-processing pipeline of statue faces.
 
@@ -149,7 +149,7 @@ I modified the code and parameters from https://github.com/ChrisYang/facefrontal
 2. OpenCV python bindings (pip install pyopencv or apt-get install python-opencv)
 3. scipy, pyplot (can be installed with pip)
 4. dlib (pip install dlib)
-5. dlib's trained shape predictor: http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2
+5. dlib's trained shape predictor: http://dlib.net/files/shape\_predictor\_68\_face\_landmarks.dat.bz2
 6. Pre-defined 3D model: already contained in the repository.
 
 ###Deployment Instructions:
@@ -223,7 +223,7 @@ I implemented Shapiro-Wilk test for normality to test the social attributes valu
 
 I have got the boxplot figures for annotation values and predicted values for photos and predicted values for statues (this is the order on the figures) . You can compare the photos and the statues with the boxplot.
 
-As for the us10k dataset,  you can see the correlation coefficients analysis like I did on the last dataset here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/us10K_keywordSocialCorrPairsSorted.csv ) and here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/us10K_correlationKeywordsSocialEval.csv) .
+As for the us10k dataset,  you can see the correlation coefficients analysis like I did on the last dataset here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/us10K\_keywordSocialCorrPairsSorted.csv ) and here ( https://github.com/mfs6174/GSoC2016-RedHen/blob/master/ML4RomeArt/keywordResults/us10K\_correlationKeywordsSocialEval.csv) .
 
 ###Related Code:
 
@@ -248,7 +248,7 @@ As for the us10k dataset,  you can see the correlation coefficients analysis lik
 3. Validating the trained regressors: Run "python socialLearningFromStructure.py validation annoatation-data-of-the-dataset saved-face-feature-file-of-the-dataset path-to-output-the-most-and-least-face-images". The code will print the validation metrics to the screen and csv file. In additional, the code will select the face images with the highest or the lowest predicted values of each social attributes and save them to "path-to-output-the-most-and-least-face-images" directory.
 4. Transfering the trained regressors to Roman statue face images: Run "python socialLearningFromStructure.py transfer saved-statue-face-feature-file file-to-save-the-social-evaluation-result-of-statues  saved-photo-face-feature-file label-file". The last argument is needed only when transfering the us10k dataset.  The regressors will be applied to the statue faces and produce predicted social attribute values. The saved social evaluation results will be used in the next functions.
 5. Analyzing the correlations between predicted social attribute values and keywords of the statue: Run "python socialLearningFromStructure.py analysis pickled-Word-Count-file(TF-reduce.pkl produced by the keyword analysis part) file-with-saved-social-evaluation-result".The code will produce "correlationKeywordsSocialEval.csv" containing the correlation coefficients between predicted social attribute values and keywords of the statues.
-6. Generating dimension analysis visualization figures: Run the code as "python socialLearningFromStructure.py pca pickled-Word-Count-file(TF-reduce.pkl produced by the keyword analysis part) file-with-saved-social-evaluation-result-of-statues validation-result(produced by function 3)". The code will produce a visualization figure for the dimension analysis with the social attributes values and keywords occurrence. The figure file name is "DATASET\_PREF+\_Attributes_Keywords.png" and you can change the figure's resolution with "FIG\_SIZE" variable in the code.
+6. Generating dimension analysis visualization figures: Run the code as "python socialLearningFromStructure.py pca pickled-Word-Count-file(TF-reduce.pkl produced by the keyword analysis part) file-with-saved-social-evaluation-result-of-statues validation-result(produced by function 3)". The code will produce a visualization figure for the dimension analysis with the social attributes values and keywords occurrence. The figure file name is "DATASET\_PREF+\_Attributes\_Keywords.png" and you can change the figure's resolution with "FIG\_SIZE" variable in the code.
 7. Selecting statue faces with the highest or the lowest predicted values of each attribute for analysis: Run the code as "python socialLearningFromStructure.py argsort file-with-saved-social-evaluation-result-of-statues output-directory path-to-directory-containing-preprocessed-face-images".
 8. Comparing the predicted values of social attributes between roman statue faces and modern portraits in the dataset and producing boxplot for visualized analysis: Run the code as "python socialLearningFromStructure.py compare file-with-saved-social-evaluation-result-of-statues saved-face-feature-file-of-the-dataset annoatation-data-of-the-dataset". The code will compare the distribution of the predicted values between roman statue faces and modern portraits, perform some hypothetical test and generate boxplot figures to the figure path.
 9. Generating html webpages to show the predictions: Run "python socialLearningFromStructure.py show file-with-saved-social-evaluation-result-of-statues output-path text-file-containing-the-list-of-the-images-to-show" and "python htmlShow.py html-root-dir(the output-path in tje last command) html-file-name". The webpage " http://pisa.vrnewsscape.ucla.edu/roman/rome101/show4iccv15.html " is generated with this function.
@@ -275,7 +275,7 @@ I also used the production year annotations provided by my mentors to build a da
 
 2. ML4RomeArt/makeYearsDataset.py
 
-3. ML4RomeArt/CNN4Portraits_keras.py
+3. ML4RomeArt/CNN4Portraits\_keras.py
 
 ###Dependencies
 1. Python 2.7
@@ -293,7 +293,7 @@ I have implemented the deconv network described in this post and Zeiler's ECCV p
 
 ###Related Code:
 
-1. ML4RomeArt/DeconvTool/*
+1. ML4RomeArt/DeconvTool/\*
 
 2. ML4RomeArt/sampleSubsetImages.py
 
@@ -306,7 +306,7 @@ I have implemented the deconv network described in this post and Zeiler's ECCV p
 5. python-opencv
 
 ###Deployment Instructions:
-1. Change the "target_layer" variable on the bottom of the DeconvTool/deconvTool.py code to the layer you would like to visualize.
+1. Change the "target\_layer" variable on the bottom of the DeconvTool/deconvTool.py code to the layer you would like to visualize.
 2. Run "python DeconvTool/deconvTool.py dataset-list-file network-architecture-file trained-network-weights-file number-of-labels". The code will produce a layer output visualization figure for each label.
 
 ###Sample Output
